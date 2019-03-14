@@ -1,0 +1,15 @@
+# IntellijIdea files
+*.iml
+.idea/
+out
+
+# venv
+.venv/
+
+# db
+*.db
+
+# backup
+.!Backup/
+
+test_report_lab.pdf
