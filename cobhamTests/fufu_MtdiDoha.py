@@ -32,7 +32,7 @@ class FufuMtdi(QtCore.QThread):
     def run_fufu(self):
         self.check_bands()
 
-        # TtfCalibrate(self.controller, self.bands).run_calibrate()
+        TtfCalibrate(self.controller, self.bands).run_calibrate()
 
 
         # self.save_set_file()
@@ -111,7 +111,11 @@ class FufuMtdi(QtCore.QThread):
         else:
             tmp = self.controller.send_com_command('send_msg -d 172.24.30.2 -c dobr_partNum GET {}'.format(n + 1))
         is_err = re.search('(ERROR)', tmp)
-        sn = re.search('[A-Z0-9]{4}', tmp).group(0)
+        is_sn = re.search('[A-Z0-9]{4}', tmp)
+        if is_sn is None:
+            self.get_sn(i, n)
+        else:
+            sn = is_sn.group(0)
         return {'is_err': is_err, 'sn': sn}
 
     def check_bands(self):
