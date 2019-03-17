@@ -1,6 +1,6 @@
 import visa
 import time
-
+import pylab as pl
 from database.cobhamdb import CobhamDB
 
 
@@ -8,6 +8,9 @@ class Instruments:
     def __init__(self, **kwargs):
         self.controller = kwargs.get('controller')
         self.parent = kwargs.get('parent')
+        self.db = CobhamDB()
+        self.gen_calibr = self.controller.str_to_dict(self.db.get_gen_offset()[0])
+        self.sa_calibr = self.controller.str_to_dict(self.db.get_sa_offset()[0])
         self.sa = None
         self.gen = None
         try:
@@ -126,23 +129,12 @@ class Instruments:
             else:
                 genPow -= steep
 
-    def getOffset(self):
-        try:
-            offList = []
-            span = self.parent.limitsAmpl.get('freqstop') - self.parent.limitsAmpl.get('freqstart')
-            center = self.parent.limitsAmpl.get('freqstart') + span / 2
-            f = open(self.config.getConfAttr('settings', 'calibrationFile'), "r")
-            for line in f:
-                off = line.strip().split(';')
-                off[0] = float(off[0])/1000000
-                offList.append(off)
-            for n in offList:
-                if n[0] <= center < n[0] + 70:
-                    return n[1]
-        except Exception as e:
-            print(str(e))
-            input('Calibration data file open error. Press enter for continue...')
-            self.parent.menu()
+    def get_offset(self, freq):
+        step = float(self.db.get_all_data('settings').get('cal_steep'))
+        start = self.gen_calibr.get(freq - (freq % step))
+        stop = self.gen_calibr.get(start + step)
+        return start
+
 
     def check_instr(self):
         addr_gen = CobhamDB().get_all_data('settings').get('addr_gen')
