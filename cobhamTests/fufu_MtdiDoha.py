@@ -6,6 +6,7 @@ import datetime
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QMessageBox
 
+from cobhamTests.ttf_calibration import TtfCalibrate
 from database.cobhamdb import CobhamDB
 from utils.instruments import Instruments
 from utils.storm import Storm
@@ -30,19 +31,23 @@ class FufuMtdi(QtCore.QThread):
 
     def run_fufu(self):
         self.check_bands()
-        self.save_set_file()
-        self.test_band_status()
-        self.set_assembly()
-        self.set_filters(1)
-        self.test_composite_power()
 
-        self.verify_connections()
-        self.test_swv()
-        self.mute_test()
-        self.test_ext_alarm()
-        self.gpr_gps_test()
-        self.set_ip()
-        self.clear_log()
+        # TtfCalibrate(self.controller, self.bands).run_calibrate()
+
+
+        # self.save_set_file()
+        # self.test_band_status()
+        # self.set_assembly()
+        # self.set_filters(1)
+        # self.test_composite_power()
+        #
+        # self.verify_connections()
+        # self.test_swv()
+        # self.mute_test()
+        # self.test_ext_alarm()
+        # self.gpr_gps_test()
+        # self.set_ip()
+        # self.clear_log()
 
     def set_assembly(self):
         db = CobhamDB()
@@ -83,18 +88,15 @@ class FufuMtdi(QtCore.QThread):
         sn_list = {}
         for i, j in enumerate(self.bands):
             n = i%2
-            if i < 2:
-                tmp = self.controller.send_com_command('dobr_partNum GET {}'.format(n + 1))
-            else:
-                tmp = self.controller.send_com_command('send_msg -d 172.24.30.2 -c dobr_partNum GET {}'.format(n + 1))
-            if not 'part number = ' in tmp or 'ERROR' in tmp:
-                self.controller.log_signal.emit('Get ASIS Fail. Retrying')
-                self.get_bands_sn()
-            try:
-                sn = re.search('[A-Z0-9]{4}', tmp).group(0)
-            except:
-                self.controller.log_signal.emit('Get ASIS Fail. Retrying')
-                self.get_bands_sn()
+            while 1:
+                q = self.get_sn(i, n)
+                if q.get('is_err') is not None:
+                    self.controller.log_signal.emit('Get band {} ASIS error. Retrying'.format(j))
+                    time.sleep(1)
+                    continue
+                else:
+                    sn = q.get('sn')
+                    break
             sn_list.update({j: sn})
             if i < 2:
                 self.sn_list_master.update({j: sn})
@@ -102,6 +104,15 @@ class FufuMtdi(QtCore.QThread):
                 self.sn_list_slave.update({j: sn})
             self.controller.log_signal.emit('Band {} ASIS = {}'.format(j, sn))
         return sn_list
+
+    def get_sn(self, i, n):
+        if i < 2:
+            tmp = self.controller.send_com_command('dobr_partNum GET {}'.format(n + 1))
+        else:
+            tmp = self.controller.send_com_command('send_msg -d 172.24.30.2 -c dobr_partNum GET {}'.format(n + 1))
+        is_err = re.search('(ERROR)', tmp)
+        sn = re.search('[A-Z0-9]{4}', tmp).group(0)
+        return {'is_err': is_err, 'sn': sn}
 
     def check_bands(self):
         self.controller.send_test_name('Check bands', 'starting')
