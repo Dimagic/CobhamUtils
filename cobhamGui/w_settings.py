@@ -3,9 +3,10 @@ import inspect
 from PyQt5 import uic, QtWidgets, QtCore
 from PyQt5.QtCore import QRegExp
 from PyQt5.QtGui import QRegExpValidator
-from PyQt5.QtWidgets import QDialog, QComboBox, QLineEdit, QFileDialog, QMessageBox
+from PyQt5.QtWidgets import QDialog, QComboBox, QLineEdit, QFileDialog
 
 from database.cobhamdb import CobhamDB
+from utils.cfg_parser import Config
 from utils.comPorts import ComPort
 from utils.instruments import Instruments
 
@@ -13,6 +14,7 @@ from utils.instruments import Instruments
 class WindowSettings(QDialog):
     def __init__(self, parent):
         super(WindowSettings, self).__init__(parent)
+        self.parent = parent
         self.appIcon = parent.appIcon
         self.w_settings = uic.loadUi('forms/settings.ui')
         self.w_settings.setWindowTitle('Settings')
@@ -26,6 +28,8 @@ class WindowSettings(QDialog):
         self.w_settings.buttonBox.button(QtWidgets.QDialogButtonBox.Ok).clicked.connect(self.is_pressed_ok)
         self.w_settings.buttonBox.button(QtWidgets.QDialogButtonBox.Cancel).clicked.connect(self.is_pressed_cancel)
         self.w_settings.storm_path_btn.clicked.connect(self.select_storm_path)
+        self.w_settings.export_btn.clicked.connect(self.export_settings)
+        self.w_settings.import_btn.clicked.connect(self.import_settings)
 
         self.w_settings.combo_gen.currentTextChanged.connect(self.is_generator_changed)
         self.w_settings.combo_sa.currentTextChanged.connect(self.is_analyzer_changed)
@@ -64,7 +68,6 @@ class WindowSettings(QDialog):
         instr = Instruments(parent=self.parent)
         self.listInstr = instr.getListInstrument()
         instr.rm.close()
-        # self.listInstr.update({'': ''})
         self.w_settings.combo_gen.addItem('', '')
         self.w_settings.combo_sa.addItem('', '')
         for key in self.listInstr.keys():
@@ -138,7 +141,24 @@ class WindowSettings(QDialog):
             self.w_settings.combo_gen.setCurrentText('')
 
     def select_storm_path(self):
-        file = ['sdsdsdsdsds']
-        print('path')
-        file = QFileDialog.getOpenFileName(self,"Select Storm Interface file", "","Executable Files (*.exe)")
-        self.w_settings.storm_path.setText(file[0])
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        fileName, _ = QFileDialog.getOpenFileName(self, "Select Storm Interface file", "", "Executable Files (*.exe)",
+                                                  options=options)
+        if fileName:
+            self.w_settings.storm_path.setText(fileName)
+
+    def export_settings(self):
+        cfg = Config(self.parent)
+        cfg.cfg_write(self.gui_read())
+
+    def import_settings(self):
+        cfg = Config(self.parent)
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        fileName, _ = QFileDialog.getOpenFileName(self, "Select configuration file", "", "Configuration Files (*.ini)",
+                                                  options=options)
+        tmp = cfg.cfg_read(file=fileName)
+        if not tmp is None:
+            self.gui_write(tmp)
+            self.parent.send_msg('i', 'Import settings', 'Import settings complete', 1)
