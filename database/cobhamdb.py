@@ -1,4 +1,6 @@
-from sqlalchemy import MetaData, Table, Column, Integer, String, ForeignKey, create_engine, Text
+import numpy
+import time
+from sqlalchemy import MetaData, Table, Column, Integer, String, ForeignKey, create_engine, Text, Float
 from sqlalchemy_utils import database_exists, create_database
 
 # Global Variables
@@ -8,6 +10,8 @@ SQLITE = 'sqlite'
 USERS = 'users'
 TESTTYPE = 'test_type'
 TESTJOURNAL = 'test_journal'
+TESTS = 'tests'
+PASSFAIL = 'passfail'
 SETTINGS = 'settings'
 INSTRUMENTS = 'instruments'
 CALIBRATION = 'calibr'
@@ -39,9 +43,16 @@ class CobhamDB:
 
         test_journal = Table(TESTJOURNAL, metadata,
                              Column('id', Integer, primary_key=True),
-                             Column('test_type_id' ,None, ForeignKey('test_type.id')),
-                             Column('user_id', None, ForeignKey('users.id'))
+                             Column('user_id', None, ForeignKey('users.id')),
+                             Column('date', String),
+                             Column('system_id', None, ForeignKey('idobr.asis'))
                              )
+
+        tests = Table(TESTS, metadata,
+                      Column('id', Integer, primary_key=True),
+                      Column('test_type_id', None, ForeignKey('test_type.id')),
+                      Column('status', String)
+                      )
 
         users = Table(USERS, metadata,
                       Column('id', Integer, primary_key=True),
@@ -55,11 +66,11 @@ class CobhamDB:
                          )
 
         calibr = Table(CALIBRATION, metadata,
-                       Column('id', Integer, primary_key=True),
-                       Column('type', String, nullable=False, unique=True),
-                       Column('date', String),
-                       Column('value', Text)
-                       )
+                          Column('id', Integer, primary_key=True),
+                          Column('cable', Float),
+                          Column('gen2sa', Float),
+                          Column('sa2gen', Float)
+                          )
 
         idobr_rf_type = Table(IDOBR_TYPE, metadata,
                          Column('id', Integer, primary_key=True),
@@ -95,6 +106,7 @@ class CobhamDB:
                          Column('type', None, ForeignKey('idobr_type.type')),
                          Column('master_sdr', None, ForeignKey('sdr.asis')),
                          Column('slave_sdr', None, ForeignKey('sdr.asis')),
+                         Column('sn', String, nullable=False, unique=True),
                          Column('asis', String, nullable=False, unique=True),
                          )
 
@@ -107,7 +119,6 @@ class CobhamDB:
     # Insert, Update, Delete
     def execute_query(self, query=''):
         if query == '': return
-        # print(query)
         with self.db_engine.connect() as connection:
             try:
                 connection.execute(query)
@@ -116,7 +127,6 @@ class CobhamDB:
 
     def update_query(self, query=''):
         if query == '': return
-        # print(query)
         with self.db_engine.connect() as connection:
             try:
                 connection.execute(query)
@@ -125,7 +135,6 @@ class CobhamDB:
 
     def select_query(self, query=''):
         if query == '': return
-        # print(query)
         with self.db_engine.connect() as connection:
             try:
                 s = []
@@ -135,14 +144,82 @@ class CobhamDB:
             except Exception as e:
                 raise e
 
+    def set_test_type(self, test_type):
+        q = self.select_query("SELECT test_type FROM test_type WHERE test_type = '{}' LIMIT 1".format(test_type))
+        if len(q) == 0:
+            self.execute_query("INSERT INTO test_type (test_type) VALUES ('{}')".format(test_type))
+            self.set_test_type(test_type)
+        else:
+            self.execute_query("create table if not exists test_{} ("
+                               "id integer PRIMARY KEY,"
+                               "system_asis text NOT NULL,"
+                               "date_test text NOT NULL,"
+                               "meas text NOT NULL,"
+                               "status text NOT NULL,"
+                               "FOREIGN KEY (system_asis) REFERENCES idobr (asis)"
+                               ")".format(test_type))
+            return q[0][0]
+    # ToDo:test result
+    # def set_test_result(self, **kwargs):
+    #     table = kwargs.get('test_type')
+    #     asis = kwargs.get('asis')
+    #     date_test = kwargs.get('date_test')
+    #     meas = kwargs.get('test_name')
+    #     status = kwargs.get('status')
+    #     self.execute_query("INSERT INTO test_{} (system_asis, date_test, meas, status) VALUES ('{}', '{}', '{}', '{}')".
+    #                        format(table, asis, date_test, test_name, status))
+
+    def get_settings_by_name(self, val):
+        tmp = self.get_all_data('settings')
+        return tmp.get(val)
+
     def clear_calibration(self):
+        self.execute_query("UPDATE settings SET last_calibr = ''")
         self.execute_query("DELETE FROM {}".format(CALIBRATION))
 
-    def get_gen_offset(self):
-        return self.select_query("SELECT value FROM calibr WHERE type = 'Gen2Sa'")[0]
+    def set_calibration(self, calibr):
+        for i in calibr.keys():
+            val = calibr.get(i)
+            self.execute_query("INSERT OR REPLACE INTO calibr "
+                               "(id, gen2sa, sa2gen) values "
+                               "({}, {}, {})".format(i, val.get('gen2sa'), val.get('sa2gen')))
+        self.execute_query("UPDATE settings SET last_calibr = {}".format(time.strftime("%Y-%m-%d", time.gmtime())))
 
-    def get_sa_offset(self):
-        return self.select_query("SELECT value FROM calibr WHERE type = 'Sa2Gen'")[0]
+    def get_offset(self, freq):
+        offset = {}
+        steep = float(self.get_settings_by_name('cal_steep'))
+        freq = float(freq)
+        start = freq - freq % steep
+        stop = start + steep
+        try:
+            start_offset = self.select_query("SELECT * FROM calibr WHERE id = {}".format(start))[0]
+            stop_offset = self.select_query("SELECT * FROM calibr WHERE id = {}".format(stop))[0]
+            # offset_cable = {'start': start_offset[1], 'stop': stop_offset[1]}
+            offset_gen = {'start': start_offset[2], 'stop': stop_offset[2]}
+            offset_sa = {'start': start_offset[3], 'stop': stop_offset[3]}
+            tmp = {'gen': offset_gen, 'sa': offset_sa}
+            for i in tmp.keys():
+                if tmp.get(i).get('start') == tmp.get(i).get('stop'):
+                    offset.update({i: float(tmp.get(i).get('start'))})
+                else:
+                    offset_list = self.calculate_offset(val=tmp.get(i))
+                    n = int(round(divmod(freq, 2)[1], 2)*100)
+                    offset.update({i: round(offset_list[n], 2)})
+            return offset
+        except:
+            raise ValueError('Calibration data from generator on frequency {} MHz not found'.format(freq))
+
+    @staticmethod
+    def calculate_offset(val):
+        start = float(val.get('start'))
+        stop = float(val.get('stop'))
+        range_offset = stop - start
+        if range_offset < 0:
+            tmp = numpy.arange(stop + range_offset / 100, start, abs(range_offset) / 100)
+            tmp = tmp[::-1]
+        else:
+            tmp = numpy.arange(start, stop, range_offset / 100)
+        return tmp
 
     def save_settings(self, setdict):
         self.execute_query("DELETE FROM {}".format(SETTINGS))
@@ -156,7 +233,6 @@ class CobhamDB:
 
     def get_all_data(self, table='', query=''):
         query = query if query != '' else "SELECT * FROM '{}';".format(table)
-        # print(query)
         for_return = {}
         with self.db_engine.connect() as connection:
             try:
