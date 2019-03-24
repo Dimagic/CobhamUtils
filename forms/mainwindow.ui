@@ -39,14 +39,22 @@
      <number>-1</number>
     </property>
    </widget>
-   <widget class="QPushButton" name="button_test">
+   <widget class="QPushButton" name="start_test_btn">
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>60</y>
-      <width>75</width>
-      <height>23</height>
+      <y>510</y>
+      <width>100</width>
+      <height>40</height>
      </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Sitka Text</family>
+      <pointsize>10</pointsize>
+      <weight>75</weight>
+      <bold>true</bold>
+     </font>
     </property>
     <property name="text">
      <string>START</string>
@@ -55,8 +63,8 @@
    <widget class="QLineEdit" name="lineCommand">
     <property name="geometry">
      <rect>
-      <x>0</x>
-      <y>310</y>
+      <x>10</x>
+      <y>470</y>
       <width>161</width>
       <height>20</height>
      </rect>
@@ -65,34 +73,14 @@
    <widget class="QPushButton" name="pushCommand">
     <property name="geometry">
      <rect>
-      <x>0</x>
-      <y>330</y>
+      <x>10</x>
+      <y>440</y>
       <width>75</width>
       <height>23</height>
      </rect>
     </property>
     <property name="text">
      <string>PushButton</string>
-    </property>
-   </widget>
-   <widget class="QLabel" name="timer_label">
-    <property name="geometry">
-     <rect>
-      <x>160</x>
-      <y>530</y>
-      <width>51</width>
-      <height>21</height>
-     </rect>
-    </property>
-    <property name="font">
-     <font>
-      <pointsize>12</pointsize>
-      <weight>75</weight>
-      <bold>true</bold>
-     </font>
-    </property>
-    <property name="text">
-     <string>00:00</string>
     </property>
    </widget>
    <widget class="QGroupBox" name="groupBox">
@@ -326,8 +314,8 @@
    <widget class="QPushButton" name="calibration_btn">
     <property name="geometry">
      <rect>
-      <x>10</x>
-      <y>520</y>
+      <x>690</x>
+      <y>10</y>
       <width>100</width>
       <height>40</height>
      </rect>
@@ -342,6 +330,152 @@
     </property>
     <property name="text">
      <string>Calibration</string>
+    </property>
+   </widget>
+   <widget class="QGroupBox" name="groupBox_2">
+    <property name="geometry">
+     <rect>
+      <x>130</x>
+      <y>510</y>
+      <width>70</width>
+      <height>40</height>
+     </rect>
+    </property>
+    <property name="title">
+     <string>Test timer</string>
+    </property>
+    <widget class="QLabel" name="timer_label">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>50</width>
+       <height>25</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>12</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>00:00</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QTreeView" name="treeView">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>60</y>
+      <width>191</width>
+      <height>371</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QGroupBox" name="groupBox_3">
+    <property name="geometry">
+     <rect>
+      <x>470</x>
+      <y>0</y>
+      <width>111</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="title">
+     <string>COM settings</string>
+    </property>
+    <widget class="QLabel" name="label_5">
+     <property name="geometry">
+      <rect>
+       <x>0</x>
+       <y>10</y>
+       <width>31</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Port:</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_6">
+     <property name="geometry">
+      <rect>
+       <x>0</x>
+       <y>30</y>
+       <width>31</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Baud:</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="port_lbl">
+     <property name="geometry">
+      <rect>
+       <x>40</x>
+       <y>10</y>
+       <width>40</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>port</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="baud_lbl">
+     <property name="geometry">
+      <rect>
+       <x>40</x>
+       <y>30</y>
+       <width>40</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>baud</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="comstat_lbl">
+     <property name="geometry">
+      <rect>
+       <x>90</x>
+       <y>20</y>
+       <width>16</width>
+       <height>16</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>com_stat</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QLabel" name="calstat_lbl">
+    <property name="geometry">
+     <rect>
+      <x>660</x>
+      <y>10</y>
+      <width>30</width>
+      <height>40</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>calstat</string>
     </property>
    </widget>
   </widget>

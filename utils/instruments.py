@@ -9,8 +9,12 @@ class Instruments:
         self.controller = kwargs.get('controller')
         self.parent = kwargs.get('parent')
         self.db = CobhamDB()
-        self.gen_calibr = self.controller.str_to_dict(self.db.get_gen_offset()[0])
-        self.sa_calibr = self.controller.str_to_dict(self.db.get_sa_offset()[0])
+        # if not self.controller is None:
+        #     gen_offset = self.db.get_gen_offset()[0]
+        #     sa_offset = self.db.get_sa_offset()[0]
+        #     self.gen_calibr = self.controller.str_to_dict(gen_offset)
+        #     self.sa_calibr = self.controller.str_to_dict(sa_offset)
+
         self.sa = None
         self.gen = None
         try:
@@ -18,6 +22,7 @@ class Instruments:
             self.rm.timeout = 50000
         except Exception as e:
             self.controller.msg_signal.emit('w','Instrument initialisation error', str(e), 1)
+            raise e
 
     def getListInstrument(self):
         listRes = self.rm.list_resources()
@@ -143,7 +148,6 @@ class Instruments:
         name_sa = CobhamDB().get_all_data('settings').get('combo_sa')
         is_instrument_present = True
         list_instr = self.getListInstrument()
-        print(list_instr, addr_sa)
         if addr_gen not in list_instr.keys() or list_instr.get(addr_gen) != name_gen:
             self.controller.log_signal_arg.emit("Generator {} not found".format(name_gen), -1)
             is_instrument_present = False

@@ -34,6 +34,9 @@ class TtfCalibrate:
             dl_center = start + (stop - start) / 2
             for band in all_bands:
                 if band.get('Band') == band_name_freq:
+                    '''
+                    get data for calculate uplink freq
+                    '''
                     apac = int(band.get('APAC'))
                     duplex = int(band.get('Duplex'))/1000000
                     if apac == 1:
@@ -76,7 +79,7 @@ class TtfCalibrate:
             res = ast.literal_eval(tmp_gain)
             curr_fft = (int(max(res['data'])) + 60) * (-1)
             self.controller.send_com_command('axsh SET fft {} {}'.format(self.band_fft[band_number][uldl], curr_fft))
-            time.sleep(1)
+            # ToDo: every time res.get('band') is 800 ???????
             res = ast.literal_eval(tmp_gain)
             fft = self.controller.send_com_command('axsh GET fft {}'.format(self.band_fft[band_number][uldl])).strip()
             gain = int(fft) + int(max(res['data']))

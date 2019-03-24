@@ -1,38 +1,44 @@
 import logging
-import re
 import sys
 
 import time
 
 import os
+
+from datetime import datetime
 from PyQt5 import uic, QtGui, QtWidgets, QtCore
-from PyQt5.QtCore import QObject
+from PyQt5.QtCore import QObject, QSize
+from PyQt5.QtGui import QMovie
 from PyQt5.QtWidgets import QMainWindow, QMessageBox, QInputDialog
 
 from cobhamGui.w_settings import WindowSettings
 from cobhamTests.test_controller import TestController
+from database.cobhamdb import CobhamDB
+from utils.comPorts import ComPort
 
+VERSION = '0.3'
 
-VERSION = '0.2'
-LOG_FILENAME = './Log/cobham_utils.log'
 
 class MainApp(QMainWindow, QObject):
+    LOG_FILENAME = './Log/cobham_utils.log'
+    logging.basicConfig(filename=LOG_FILENAME, level=logging.ERROR)
     re_ip = r"^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.)){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
 
     def __init__(self, parent=None):
-        logging.basicConfig(filename=LOG_FILENAME, level=logging.ERROR)
         # logging.debug('This message should go to the log file')
         # logging.info('So should this')
         # logging.warning('And this, too')
 
         super(MainApp, self).__init__(parent)
+        self.db = CobhamDB()
+
         self.idobr_type = ''
         self.idobr_asis = ''
 
         self.wk_dir = os.path.dirname(os.path.realpath('__file__'))
         self.appIcon = QtGui.QIcon("img/cobham_c_64x64.ico")
         self.w_main = uic.loadUi('forms/mainwindow.ui')
-        self.w_main.setWindowTitle('CobhamUtils')
+        self.w_main.setWindowTitle('CobhamUtils {}'.format(VERSION))
         self.w_main.setWindowIcon(self.appIcon)
 
         self.login_msg = 'root@AxellShell[root]'
@@ -40,20 +46,67 @@ class MainApp(QMainWindow, QObject):
         self.myThread = None
         self.calibration_thread = None
 
-        self.w_main.button_test.clicked.connect(self.test)
+        self.passImg = QtGui.QPixmap('Img/pass.png').scaled(30, 30)
+        self.failImg = QtGui.QPixmap('Img/fail.png').scaled(30, 30)
+        self.greenLedMovie = QMovie('Img/greenLed.gif')
+        self.blueLedMovie = QMovie('Img/blueLed.gif')
+        self.redLedMovie = QMovie('Img/redLed.gif')
+
+        self.w_main.start_test_btn.clicked.connect(self.test)
         self.w_main.calibration_btn.clicked.connect(self.calibration)
         # self.w_main.pushCommand.clicked.connect(self.send_com_command)
         self.w_main.menu_Settings.triggered.connect(self.window_settings)
         self.w_main.menu_Quit.triggered.connect(self.w_main.close)
         self.w_main.menu_Quit.setShortcut('Ctrl+Q')
 
+        self.check_com(False)
+        self.check_calibration()
+
+
         self.w_main.show()
+
+
+    def check_com(self, val):
+        self.w_main.port_lbl.setText(self.db.get_settings_by_name('combo_com'))
+        self.w_main.baud_lbl.setText(self.db.get_settings_by_name('combo_baud'))
+        self.greenLedMovie.setScaledSize(QSize(13, 13))
+        isPortPresent = False
+        for i in ComPort.get_port_list():
+            if self.db.get_settings_by_name('combo_com') == i[0]:
+                isPortPresent = True
+        if isPortPresent:
+            if val:
+                self.w_main.comstat_lbl.setMovie(self.greenLedMovie)
+                self.greenLedMovie.start()
+            else:
+                self.w_main.comstat_lbl.setMovie(self.blueLedMovie)
+                self.blueLedMovie.start()
+        else:
+            self.w_main.comstat_lbl.setMovie(self.redLedMovie)
+            self.redLedMovie.start()
+
+    def check_calibration(self):
+        try:
+            # ToDo: modify check calibration algorithm
+            icon = self.passImg
+            cal_date = self.db.get_settings_by_name('last_calibr')
+            # print(datetime.strptime(cal_date, '%Y-%m-%d'))
+            self.w_main.calstat_lbl.setToolTip('Calibration date: {}'.format(cal_date))
+            is_calibrated = True
+        except:
+            icon = self.failImg
+            is_calibrated = False
+        finally:
+            self.w_main.start_test_btn.setEnabled(is_calibrated)
+            self.w_main.calstat_lbl.setPixmap(icon)
+            return is_calibrated
 
     def test(self):
         self.run_controller(type_test='test')
 
     def calibration(self):
         self.run_controller(type_test='calibration')
+        self.check_calibration()
 
     def run_controller(self, **kwargs):
         self.w_main.art_lbl.setText('')
@@ -84,6 +137,7 @@ class MainApp(QMainWindow, QObject):
         self.myThread.msg_signal.connect(self.send_msg, QtCore.Qt.QueuedConnection)
         self.myThread.input_signal.connect(self.input_msg, QtCore.Qt.QueuedConnection)
         self.myThread.set_label_signal.connect(self.set_label_text, QtCore.Qt.QueuedConnection)
+        self.myThread.check_com_signal.connect(self.check_com, QtCore.Qt.QueuedConnection)
         self.myThread.start()
 
     def window_settings(self):

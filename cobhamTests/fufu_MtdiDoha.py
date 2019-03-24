@@ -1,8 +1,9 @@
+import inspect
 import re
 
 import time
 
-import datetime
+from _datetime import datetime
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QMessageBox
 
@@ -18,6 +19,9 @@ class FufuMtdi(QtCore.QThread):
         self.controller = controller
         self.parent = controller.get_parent()
         self.db = CobhamDB()
+        self.db.set_test_type(self.__class__.__name__)
+        self.asis = self.parent.w_main.ser_lbl.text()
+        self.test_time = datetime.now().strftime("%Y/%m/%d/, %H:%M:%S")
         self.bands = None
         self.bands_sn = None
         self.sn_list_master = {}
@@ -31,15 +35,12 @@ class FufuMtdi(QtCore.QThread):
 
     def run_fufu(self):
         self.check_bands()
-
-        TtfCalibrate(self.controller, self.bands).run_calibrate()
-
-
         # self.save_set_file()
         # self.test_band_status()
-        # self.set_assembly()
         # self.set_filters(1)
         # self.test_composite_power()
+        #
+        # TtfCalibrate(self.controller, self.bands).run_calibrate()
         #
         # self.verify_connections()
         # self.test_swv()
@@ -51,12 +52,17 @@ class FufuMtdi(QtCore.QThread):
 
     def set_assembly(self):
         db = CobhamDB()
-        assembly = {}
-        assembly.update(self.controller.get_sdr_info())
-        assembly.update({'rf_master': self.sn_list_master})
-        assembly.update({'rf_slave': self.sn_list_slave})
-        assembly.update({'idobr': {'type': self.parent.idobr_type, 'asis': self.parent.idobr_asis}})
-        self.controller.log_signal.emit(str(assembly))
+        # assembly = {}
+        # assembly.update(self.controller.get_sdr_info())
+        # assembly.update({'rf_master': self.sn_list_master})
+        # assembly.update({'rf_slave': self.sn_list_slave})
+        # assembly.update({'idobr': {'type': self.parent.idobr_type, 'asis': self.parent.idobr_asis}})
+        # ToDo: temporary values
+        assembly = {'master_sdr': {'type': 'DM00033F', 'asis': 'NLXP'},
+                    'slave_sdr': {'type': 'DM000871', 'asis': 'NM1Y'},
+                    'rf_master': {'ABCD18': 'NRHC', 'ABCD08': 'NPF6'},
+                    'rf_slave': {'ABCD09': 'NRHU', 'ABCD21': 'NK8N'},
+                    'idobr': {'type': 'DOBR0292', 'asis': 'NUES'}}
         if db.set_idobr(assembly):
             self.controller.log_signal.emit('Creating assembly completed')
         else:
@@ -103,6 +109,7 @@ class FufuMtdi(QtCore.QThread):
             else:
                 self.sn_list_slave.update({j: sn})
             self.controller.log_signal.emit('Band {} ASIS = {}'.format(j, sn))
+        print(sn_list)
         return sn_list
 
     def get_sn(self, i, n):
@@ -118,10 +125,25 @@ class FufuMtdi(QtCore.QThread):
             sn = is_sn.group(0)
         return {'is_err': is_err, 'sn': sn}
 
+    def set_test_result(self):
+        # ToDo: save test result
+        # self.db.set_test_result(test_type=inspect.currentframe().f_code.co_name,
+        #                         asis=self.asis,
+        #                         date_test=self.test_time,
+        #                         meas=
+        #                         )
+        # self.db.set_test_result(, , self.asis,
+        #                         , self.controller.true_to_pass(status))
+        pass
+
     def check_bands(self):
         self.controller.send_test_name('Check bands', 'starting')
-        self.bands = self.get_bands()
-        self.bands_sn = self.get_bands_sn()
+        self.bands = ['ABCD18', 'ABCD08', 'ABCD09', 'ABCD21']
+        self.bands_sn = {'ABCD18': 'NRHC', 'ABCD08': 'NPF6', 'ABCD09': 'NRHU', 'ABCD21': 'NK8N'}
+
+        # ToDo: temporary values
+        # self.bands = self.get_bands()
+        # self.bands_sn = self.get_bands_sn()
         status = True
         doubles = {}
         for i in self.bands:
@@ -138,6 +160,9 @@ class FufuMtdi(QtCore.QThread):
                 self.check_bands()
         self.controller.log_signal.emit('Check bands: {}'.format(self.controller.true_to_pass(status)))
         self.controller.send_test_name('Check bands', 'completed')
+        self.set_assembly()
+        # self.db.set_test_result(self.__class__.__name__, inspect.currentframe().f_code.co_name, self.asis,
+        #                         self.test_time, self.controller.true_to_pass(status))
         return status
 
     def test_band_status(self):
@@ -156,10 +181,12 @@ class FufuMtdi(QtCore.QThread):
             res_list.append(result)
             self.controller.log_signal.emit('Band {} status = {}'.
                                             format(val.get('Band'), self.controller.true_to_pass(result)))
-        test_result = all(res_list)
-        self.controller.log_signal.emit('Band status: {}'.format(self.controller.true_to_pass(test_result)))
+        status = all(res_list)
+        self.controller.log_signal.emit('Band status: {}'.format(self.controller.true_to_pass(status)))
         self.controller.send_test_name('Band status test', 'completed')
-        return test_result
+        # self.db.set_test_result(self.__class__.__name__, inspect.currentframe().f_code.co_name, self.asis,
+        #                         self.test_time, self.controller.true_to_pass(status))
+        return status
 
     def test_ext_alarm(self):
         self.controller.send_test_name('External alarms test', 'started')
@@ -182,10 +209,12 @@ class FufuMtdi(QtCore.QThread):
                         res_list.append(False)
                         self.controller.log_signal.emit('EXT{} alarm: FAIL'.format(pin))
                         break
-        test_status = self.controller.true_to_pass(all(res_list))
-        self.controller.log_signal.emit('External alarms: {}'.format(test_status))
+        status = self.controller.true_to_pass(all(res_list))
+        self.controller.log_signal.emit('External alarms: {}'.format(status))
         self.controller.send_test_name('External alarms test', 'completed')
-        return test_status
+        # self.db.set_test_result(self.__class__.__name__, inspect.currentframe().f_code.co_name, self.asis,
+        #                         self.test_time, self.controller.true_to_pass(status))
+        return status
 
     def test_swv(self):
         self.controller.send_test_name('Software verification', 'started')
@@ -226,6 +255,8 @@ class FufuMtdi(QtCore.QThread):
         if not master or not slave:
             status = 'FAIL'
         self.controller.log_signal.emit("Verify connections to both SDR'S: {}".format(status))
+        # self.db.set_test_result(self.__class__.__name__, inspect.currentframe().f_code.co_name, self.asis,
+        #                         self.test_time, self.controller.true_to_pass(status))
 
     def get_ext_alarm(self):
         alarms = {}
@@ -269,6 +300,8 @@ class FufuMtdi(QtCore.QThread):
             self.controller.log_signal.emit('Set band {} Transmission: Enable'.format(self.bands[band - 1]))
             self.controller.send_com_command('dobr_pa_control SET {} {}'.format(band, 1))
         self.set_filters(1)
+        # self.db.set_test_result(self.__class__.__name__, inspect.currentframe().f_code.co_name, self.asis,
+        #                         self.test_time, self.controller.true_to_pass(status))
 
     def set_filters(self, enable_filter):
         self.controller.send_test_name('Setting filters', 'started')
@@ -299,9 +332,6 @@ class FufuMtdi(QtCore.QThread):
     def test_composite_power(self):
         self.controller.send_test_name('DL composite power test', 'started')
         test_status = True
-        gen_calibr = self.controller.str_to_dict(self.db.get_gen_offset()[0])
-        sa_calibr = self.controller.str_to_dict(self.db.get_sa_offset()[0])
-
         try:
             self.controller.send_msg('i', 'DL composite power test',
                 'Connect Generator to Base, Spectrum to Mobile using attenuators 30 dB', 1)
@@ -315,12 +345,10 @@ class FufuMtdi(QtCore.QThread):
                 start = float(band_info.get(band_name)[0].get('DL_start_freq'))
                 stop = float(band_info.get(band_name)[0].get('DL_end_freq'))
                 center = start + (stop - start) / 2
-                if center in gen_calibr.keys():
-                    gen_offset = gen_calibr.get(center)
-                    sa_offset = sa_calibr.get(center)
-                else:
-                    gen_offset = gen_calibr.get(center - center % 5)
-                    sa_offset = sa_calibr.get(center - center % 5)
+                offset = self.db.get_offset(center)
+                gen_offset = offset.get('gen')
+                sa_offset = offset.get('sa')
+
                 instr.sa.write("DISP:WIND:TRAC:Y:RLEV:OFFS {}".format(30 + sa_offset ))
                 instr.sa.write(":SENSE:FREQ:center {} MHz".format(center))
                 instr.gen.write(":FREQ:FIX {} MHz".format(center))

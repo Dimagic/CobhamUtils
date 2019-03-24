@@ -85,6 +85,7 @@ class WindowSettings(QDialog):
         for _v in values.keys():
             for_query.update({_v: values.get(_v)[0]})
         self.db.save_settings(for_query)
+        self.parent.check_com(False)
         self.w_settings.close()
 
     def verify_settings(self):
@@ -101,13 +102,16 @@ class WindowSettings(QDialog):
                 obj = struct.get(_v)[2]
                 if obj.__class__ is QComboBox:
                     index = obj.findText(for_write.get(_v), QtCore.Qt.MatchFixedString)
-                    if index >= 0:
+                    if index != -1:
                         obj.setCurrentIndex(index)
+                    else:
+                        obj.addItem('')
+                        obj.setCurrentIndex(obj.count()-1)
                 if obj.__class__ is QLineEdit:
                     obj.setText(for_write.get(_v))
             except Exception as e:
-                print(e)
-
+                raise e
+        self.parent.check_com(False)
     '''
     Fill dictionary with checked values
     '''

@@ -25,14 +25,5 @@ class ComPort:
             ser.reset_output_buffer()
             return ser
         except Exception as e:
-            return e
+            raise e
 
-    # def comPortListener(self):
-    #     while self.ser.is_open:
-    #         try:
-    #             out = str(self.ser.readline(), 'utf-8').replace("\n", "")
-    #             if len(out) != 0:
-    #                 self.test_controller.log_signal_arg.emit(out, 0)
-    #                 print(out)
-    #         except serial.SerialException as e:
-    #             print(e)

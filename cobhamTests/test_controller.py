@@ -17,16 +17,18 @@ from utils.calibration import Calibration
 from utils.comPorts import ComPort
 from utils.instruments import Instruments
 
-LOG_FILENAME = './Log/cobham_utils.log'
 
 class TestController(QtCore.QThread):
+    LOG_FILENAME = './Log/cobham_utils.log'
     logging.basicConfig(filename=LOG_FILENAME, level=logging.ERROR)
+
     log_signal = QtCore.pyqtSignal(str)
     log_signal_arg = QtCore.pyqtSignal(str, int)
     timer_signal = QtCore.pyqtSignal(float)
     msg_signal = QtCore.pyqtSignal(str, str, str, int)
     input_signal = QtCore.pyqtSignal(str)
     set_label_signal = QtCore.pyqtSignal(str, str)
+    check_com_signal = QtCore.pyqtSignal(bool)
 
     def __init__(self, parent=None, **kwargs):
         QtCore.QThread.__init__(self, parent)
@@ -35,13 +37,19 @@ class TestController(QtCore.QThread):
         self.settings = CobhamDB().get_all_data('settings')
         self.login_msg = self.curr_parent.login_msg
         self.isSystemBoot = False
+        self.db = CobhamDB()
 
     def run(self):
         try:
-            # if not Instruments(controller=self).check_instr():
-            #     return
+            print(self.db.get_offset(1578.32))
+            if not Instruments(controller=self).check_instr():
+                return
             if self.type_test == 'test':
-                self.system_login()
+                if not self.curr_parent.check_calibration():
+                    return
+                if not self.system_login():
+                    self.send_msg('w', 'CobhamUtils', 'System login fail', 1)
+                    return
                 self.get_ip()
                 # self.get_bands()
 
@@ -49,6 +57,12 @@ class TestController(QtCore.QThread):
             if self.type_test == 'calibration':
                 calibr = Calibration(controller=self)
                 calibr.run_calibration()
+        except ValueError as e:
+            self.send_msg('w', 'CobhamUtils', str(e), 1)
+            return
+        except serial.serialutil.SerialException as e:
+            self.send_msg('c', 'Error', str(e), 1)
+            return
         except Exception as e:
             traceback_str = ''.join(traceback.format_tb(e.__traceback__))
             self.log_signal_arg.emit(traceback_str, -1)
@@ -74,7 +88,7 @@ class TestController(QtCore.QThread):
 
     def axell_boot(self):
         self.log_signal_arg.emit("Waiting End of Axell boot", 0)
-        with ComPort().get_connection() as ser:
+        with ComPort.get_connection() as ser:
             while ser.is_open:
                 try:
                     try:
@@ -96,20 +110,29 @@ class TestController(QtCore.QThread):
 
     def system_login(self):
         res = self.send_com_command('')
-        print(res)
+        re_string = '({})@[\S]+\[{}\]'.format(self.settings.get('user_name'), self.settings.get('user_name'))
         if res is None:
             return
-        elif self.login_msg in res:
+        if re.search(re_string, res):
             self.log_signal.emit('System already login ...')
+            return True
         else:
             self.log_signal.emit('Login in system ...')
-            db = CobhamDB()
             self.send_com_command(self.settings.get('user_name'))
-            self.send_com_command(self.settings.get('user_pass'))
+            time.sleep(1)
+            res = self.send_com_command(self.settings.get('user_pass'))
+            if re.search(re_string, res):
+                self.log_signal.emit('Login in system complete')
+                return True
+            else:
+                self.log_signal.emit('Login fail. Retry after 5 seconds ...')
+                time.sleep(5)
+                self.system_login()
 
 
     def send_com_command(self, cmd):
-        print('-> {}'.format(cmd))
+        # print('-> {}'.format(cmd))
+        res = ''
         cmd_tmp = cmd
         if cmd == self.settings.get('user_name') or \
                 cmd == self.settings.get('user_pass') or \
@@ -117,11 +140,13 @@ class TestController(QtCore.QThread):
             is_login = True
         else:
             is_login = False
-        ser = ComPort().get_connection()
+        ser = ComPort.get_connection()
         if 'Exception' in type(ser).__name__:
             self.send_msg('w', 'Warning', str(ser), 1)
-            return
-        with ser:
+            raise ser
+        else:
+            self.check_com_signal.emit(ser.is_open)
+        try:
             cmd = cmd + '\r'
             ser.write(cmd.encode('utf-8'))
             res = ser.read()
@@ -157,7 +182,12 @@ class TestController(QtCore.QThread):
                     pass
             if not is_login:
                 res = str(res).replace(cmd, '').replace('root@AxellShell[root]>', '')
-            print('<- {}'.format(res))
+            # print('<- {}'.format(res))
+        except Exception as e:
+            raise e
+        finally:
+            ser.close()
+            self.check_com_signal.emit(ser.is_open)
             return res
 
     def get_ip(self):

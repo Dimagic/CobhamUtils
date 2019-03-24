@@ -29,18 +29,25 @@ class Calibration:
         self.controller.log_signal.emit("Start calibration")
         answer = self.controller.send_msg('i', 'Calibration', "Connect generator to analyzer using "
                                                               "cable with attenuator. And press OK.", 2)
+
         if answer != QMessageBox.Ok :
             return
 
         self.db.clear_calibration()
-        self.loop_calibration('Sa2Gen')
+        list_gen2sa = self.loop_calibration('gen2sa')
 
         answer = self.controller.send_msg('i', 'Calibration', "Connect analyzer to generator using "
                                                               "cable with attenuator. And press OK.", 2)
         if answer != QMessageBox.Ok :
             return
-        self.loop_calibration('Gen2Sa')
+        list_sa2gen = self.loop_calibration('sa2gen')
+        calibr = {}
+        for i in list_gen2sa.keys():
+            val = {'gen2sa': list_gen2sa.get(i), 'sa2gen': list_sa2gen.get(i)}
+            calibr.update({i: val})
+        self.db.set_calibration(calibr)
         self.controller.log_signal.emit('Calibration complete')
+        self.controller.get_parent().check_calibration()
 
     def loop_calibration(self, type):
         list_val = {}
@@ -71,8 +78,10 @@ class Calibration:
             offset = round(gen_pow - gain, 2)
             list_val.update({i: offset})
             # self.instr.sa_send_cmd(":TRAC1:MODE WRIT")
+            # self.db.set_calibration(column=type, freq=i, val=offset)
             self.controller.log_signal.emit('Freq {} MHz: offset = {}'.format(i, offset))
         self.instr.gen.write(":OUTP:STAT OFF")
-        CobhamDB().execute_query("INSERT INTO calibr (type, date, value) VALUES ('{}', '{}', '{}')".format(type,
-                                time_now, list_val))
+        return list_val
+
+
 
