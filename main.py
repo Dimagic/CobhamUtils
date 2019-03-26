@@ -1,23 +1,46 @@
-import logging
-import sys
-
-import time
-
 import os
+import sys
+import threading
+import time
+import logging
 
-from datetime import datetime
+import datetime
+from concurrent import futures
+
 from PyQt5 import uic, QtGui, QtWidgets, QtCore
 from PyQt5.QtCore import QObject, QSize
 from PyQt5.QtGui import QMovie
 from PyQt5.QtWidgets import QMainWindow, QMessageBox, QInputDialog
 
+from utils.comPorts import ComPort
+from cobhamGui.w_calibration import WindowCalibration
 from cobhamGui.w_settings import WindowSettings
 from cobhamTests.test_controller import TestController
 from database.cobhamdb import CobhamDB
-from utils.comPorts import ComPort
 
-VERSION = '0.3'
 
+VERSION = '0.4'
+class EventListener(QtCore.QThread):
+    timer_signal = QtCore.pyqtSignal(float)
+    def __init__(self, parent):
+        QtCore.QThread.__init__(self, parent)
+        self.parent = parent
+
+    def run(self, including_parent=True):
+        while True:
+            if not self.parent.controller_thread is None:
+                isRuning = self.parent.controller_thread.isRunning()
+                if isRuning:
+                    self.parent.w_main.start_test_btn.setText('STOP')
+                    delta = datetime.datetime.now().timestamp() - self.parent.controller_thread.startTime
+                    self.timer_signal.emit(delta)
+                else:
+                    self.parent.w_main.start_test_btn.setText('START')
+
+                # self.parent.w_main.start_test_btn.setEnabled(not isRuning)
+                self.parent.w_main.calibration_btn.setEnabled(not isRuning)
+                self.parent.w_main.menubar.setEnabled(not isRuning)
+            time.sleep(.5)
 
 class MainApp(QMainWindow, QObject):
     LOG_FILENAME = './Log/cobham_utils.log'
@@ -43,7 +66,7 @@ class MainApp(QMainWindow, QObject):
 
         self.login_msg = 'root@AxellShell[root]'
         self.answer = None
-        self.myThread = None
+        self.controller_thread = None
         self.calibration_thread = None
 
         self.passImg = QtGui.QPixmap('Img/pass.png').scaled(30, 30)
@@ -54,7 +77,6 @@ class MainApp(QMainWindow, QObject):
 
         self.w_main.start_test_btn.clicked.connect(self.test)
         self.w_main.calibration_btn.clicked.connect(self.calibration)
-        # self.w_main.pushCommand.clicked.connect(self.send_com_command)
         self.w_main.menu_Settings.triggered.connect(self.window_settings)
         self.w_main.menu_Quit.triggered.connect(self.w_main.close)
         self.w_main.menu_Quit.setShortcut('Ctrl+Q')
@@ -62,8 +84,12 @@ class MainApp(QMainWindow, QObject):
         self.check_com(False)
         self.check_calibration()
 
-
         self.w_main.show()
+
+        self.stop_event = threading.Event()
+        self.c_thread = EventListener(self)
+        self.c_thread.timer_signal.connect(self.set_timer, QtCore.Qt.QueuedConnection)
+        self.c_thread.start()
 
 
     def check_com(self, val):
@@ -102,11 +128,21 @@ class MainApp(QMainWindow, QObject):
             return is_calibrated
 
     def test(self):
-        self.run_controller(type_test='test')
+        if self.w_main.start_test_btn.text() == 'START':
+            self.run_controller(type_test='test')
+        else:
+            if self.send_msg('i', 'CobhamUtils', 'stop', 2) == QMessageBox.Ok:
+                with futures.ThreadPoolExecutor(1) as executor:
+                    executor.submit(self.controller_thread.test)
+                # self.controller_thread.curr_test.stop_test()
+
+
 
     def calibration(self):
-        self.run_controller(type_test='calibration')
-        self.check_calibration()
+        WindowCalibration(self)
+        # Calibration(self)
+        # self.run_controller(type_test='calibration')
+        # self.check_calibration()
 
     def run_controller(self, **kwargs):
         self.w_main.art_lbl.setText('')
@@ -130,15 +166,15 @@ class MainApp(QMainWindow, QObject):
                 self.w_main.rev_lbl.setText(tmp[0][l-1:])
                 self.w_main.ser_lbl.setText(tmp[1])
 
-        self.myThread = TestController(curr_parent=self, type_test=kwargs.get('type_test'))
-        self.myThread.log_signal.connect(self.send_log, QtCore.Qt.QueuedConnection)
-        self.myThread.log_signal_arg.connect(self.send_log, QtCore.Qt.QueuedConnection)
-        self.myThread.timer_signal.connect(self.set_timer, QtCore.Qt.QueuedConnection)
-        self.myThread.msg_signal.connect(self.send_msg, QtCore.Qt.QueuedConnection)
-        self.myThread.input_signal.connect(self.input_msg, QtCore.Qt.QueuedConnection)
-        self.myThread.set_label_signal.connect(self.set_label_text, QtCore.Qt.QueuedConnection)
-        self.myThread.check_com_signal.connect(self.check_com, QtCore.Qt.QueuedConnection)
-        self.myThread.start()
+        self.controller_thread = TestController(curr_parent=self, type_test=kwargs.get('type_test'))
+        self.controller_thread.log_signal.connect(self.send_log, QtCore.Qt.QueuedConnection)
+        self.controller_thread.log_signal_arg.connect(self.send_log, QtCore.Qt.QueuedConnection)
+        self.controller_thread.timer_signal.connect(self.set_timer, QtCore.Qt.QueuedConnection)
+        self.controller_thread.msg_signal.connect(self.send_msg, QtCore.Qt.QueuedConnection)
+        self.controller_thread.input_signal.connect(self.input_msg, QtCore.Qt.QueuedConnection)
+        self.controller_thread.set_label_signal.connect(self.set_label_text, QtCore.Qt.QueuedConnection)
+        self.controller_thread.check_com_signal.connect(self.check_com, QtCore.Qt.QueuedConnection)
+        self.controller_thread.start()
 
     def window_settings(self):
         WindowSettings(self)

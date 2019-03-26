@@ -245,7 +245,7 @@
        <x>130</x>
        <y>110</y>
        <width>110</width>
-       <height>110</height>
+       <height>81</height>
       </rect>
      </property>
      <property name="title">
@@ -316,7 +316,7 @@
        <x>10</x>
        <y>110</y>
        <width>110</width>
-       <height>110</height>
+       <height>121</height>
       </rect>
      </property>
      <property name="title">
@@ -413,9 +413,9 @@
     <widget class="QLabel" name="label_14">
      <property name="geometry">
       <rect>
-       <x>250</x>
-       <y>120</y>
-       <width>91</width>
+       <x>130</x>
+       <y>200</y>
+       <width>41</width>
        <height>22</height>
       </rect>
      </property>
@@ -426,7 +426,7 @@
       </font>
      </property>
      <property name="text">
-      <string>Last calibration:</string>
+      <string>Date:</string>
      </property>
     </widget>
     <widget class="QLineEdit" name="last_calibr">
@@ -435,11 +435,14 @@
      </property>
      <property name="geometry">
       <rect>
-       <x>350</x>
-       <y>120</y>
-       <width>51</width>
+       <x>170</x>
+       <y>200</y>
+       <width>61</width>
        <height>22</height>
       </rect>
+     </property>
+     <property name="text">
+      <string/>
      </property>
     </widget>
    </widget>

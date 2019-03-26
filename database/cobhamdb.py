@@ -203,11 +203,16 @@ class CobhamDB:
                     offset.update({i: float(tmp.get(i).get('start'))})
                 else:
                     offset_list = self.calculate_offset(val=tmp.get(i))
-                    n = int(round(divmod(freq, 2)[1], 2)*100)
-                    offset.update({i: round(offset_list[n], 2)})
+                    try:
+                        n = int(round(divmod(freq, 2)[1], 2)*100)
+                        offset.update({i: round(offset_list[n], 2)})
+                    except:
+                        n = int(round(divmod(freq, 1)[1], 2) * 100)
+                        offset.update({i: round(offset_list[n], 2)})
             return offset
-        except:
-            raise ValueError('Calibration data from generator on frequency {} MHz not found'.format(freq))
+        except Exception as e:
+            print(e)
+            raise ValueError('Calibration data on frequency {} MHz not found'.format(freq))
 
     @staticmethod
     def calculate_offset(val):
@@ -216,6 +221,7 @@ class CobhamDB:
         range_offset = stop - start
         if range_offset < 0:
             tmp = numpy.arange(stop + range_offset / 100, start, abs(range_offset) / 100)
+            print(tmp)
             tmp = tmp[::-1]
         else:
             tmp = numpy.arange(start, stop, range_offset / 100)

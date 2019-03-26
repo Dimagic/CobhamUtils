@@ -4,15 +4,17 @@ import time
 
 from PyQt5.QtWidgets import QMessageBox
 
+from database.cobhamdb import CobhamDB
 from utils.instruments import Instruments
 
 
-class TtfCalibrate:
+class FftCalibrate:
     def __init__(self, controller, bands):
         self.controller = controller
         self.bands = bands
         self.test_status = 'PASS'
         self.instr = Instruments(controller=self.controller)
+        self.db = CobhamDB()
         self.instr.genPreset()
         self.instr.saPreset()
         # {band_number: [UL, DL]}
@@ -20,9 +22,7 @@ class TtfCalibrate:
         self.band_fft = {1: [2, 3], 2: [0, 1], 3: [6, 7], 4: [4, 5]}
 
     def run_calibrate(self):
-        self.controller.send_test_name('FFT calibration', 'started')
         all_bands = self.controller.str_to_dict(self.controller.send_com_command('bands --json')).get('bands')
-
         for n, band in enumerate(self.bands):
             n = n + 1
             band_info = self.controller.str_to_dict(
@@ -57,8 +57,6 @@ class TtfCalibrate:
             for i in self.band_uldl.keys():
                 self.get_peak(i, 0)
         self.controller.log_signal.emit('FFT calibration: {}'.format(self.test_status))
-        self.controller.send_test_name('FFT calibration', 'completed')
-
 
     def get_peak(self, band_number, uldl):
         try:
@@ -66,12 +64,11 @@ class TtfCalibrate:
                 uldl_name = 'Uplink'
             else:
                 uldl_name = 'Downlink'
-
             center_freq = self.band_uldl.get(band_number)[uldl]
-
+            offset = self.db.get_offset(center_freq)
             self.instr.sa.write(":SENSE:FREQ:center {} MHz".format(center_freq))
             self.instr.gen.write(":FREQ:FIX {} MHz".format(center_freq))
-            self.instr.gen.write("POW:AMPL {} dBm".format(-60 + self.instr.get_offset(center_freq)))
+            self.instr.gen.write("POW:AMPL {} dBm".format(-60 + offset.get('gen')))
             self.instr.gen.write(":OUTP:STAT ON")
             self.controller.send_com_command('axsh SET fft {} -195'.format(self.band_fft[band_number][uldl]))
             time.sleep(1)
@@ -89,7 +86,8 @@ class TtfCalibrate:
                 self.test_status = 'FAIL'
             self.controller.log_signal.emit('{} {} FFT = {} Gain = {} '.format(res.get('band'), uldl_name, fft, gain))
             self.instr.gen.write(":OUTP:STAT OFF")
-        except:
+        except Exception as e:
+            print(e)
             self.controller.log_signal.emit('Get peak error, retrying')
             self.get_peak(band_number, uldl)
 

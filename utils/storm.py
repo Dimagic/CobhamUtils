@@ -47,7 +47,7 @@ class CheckStorm(threading.Thread):
 class Storm:
     def __init__(self, controller, bands, bands_sn):
         self.controller = controller
-        self.parent = self.controller.get_parent()
+        self.parent = self.controller.curr_parent
         Timings.window_find_timeout = 60
         self.count_bands = 0
         self.settings = self.controller.settings

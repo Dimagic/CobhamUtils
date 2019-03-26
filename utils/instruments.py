@@ -1,6 +1,6 @@
 import visa
 import time
-import pylab as pl
+from pyvisa import VisaIOError
 from database.cobhamdb import CobhamDB
 
 
@@ -61,10 +61,13 @@ class Instruments:
 
 
     def sa_send_cmd(self, cmd):
-        self.sa.write(cmd)
-        time.sleep(.2)
-        while int(self.sa.query("*OPC?")) != 1:
-            time.sleep(.1)
+        try:
+            self.sa.write(cmd)
+            time.sleep(.2)
+            while int(self.sa.query("*OPC?")) != 1:
+                time.sleep(.1)
+        except VisaIOError:
+            self.sa_send_cmd(cmd)
 
 
     def sa_send_query(self, cmd):
@@ -134,11 +137,11 @@ class Instruments:
             else:
                 genPow -= steep
 
-    def get_offset(self, freq):
-        step = float(self.db.get_all_data('settings').get('cal_steep'))
-        start = self.gen_calibr.get(freq - (freq % step))
-        stop = self.gen_calibr.get(start + step)
-        return start
+    # def get_offset(self, freq):
+    #     step = float(self.db.get_all_data('settings').get('cal_steep'))
+    #     start = self.gen_calibr.get(freq - (freq % step))
+    #     stop = self.gen_calibr.get(start + step)
+    #     return start
 
 
     def check_instr(self):

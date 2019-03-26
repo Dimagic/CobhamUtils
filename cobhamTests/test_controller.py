@@ -6,6 +6,7 @@ import time
 
 import datetime
 import traceback
+from concurrent import futures
 
 import serial
 from PyQt5 import QtCore
@@ -32,16 +33,17 @@ class TestController(QtCore.QThread):
 
     def __init__(self, parent=None, **kwargs):
         QtCore.QThread.__init__(self, parent)
+        self.startTime = datetime.datetime.now().timestamp()
         self.curr_parent = kwargs.get('curr_parent')
         self.type_test = kwargs.get('type_test')
         self.settings = CobhamDB().get_all_data('settings')
         self.login_msg = self.curr_parent.login_msg
         self.isSystemBoot = False
+        self.curr_test = None
         self.db = CobhamDB()
 
     def run(self):
         try:
-            print(self.db.get_offset(1578.32))
             if not Instruments(controller=self).check_instr():
                 return
             if self.type_test == 'test':
@@ -53,10 +55,11 @@ class TestController(QtCore.QThread):
                 self.get_ip()
                 # self.get_bands()
 
-                FufuMtdi(self)
+                self.curr_test = FufuMtdi(self)
+                self.curr_test.run_fufu()
             if self.type_test == 'calibration':
-                calibr = Calibration(controller=self)
-                calibr.run_calibration()
+                self.curr_test = Calibration(controller=self)
+                self.curr_test.run_calibration()
         except ValueError as e:
             self.send_msg('w', 'CobhamUtils', str(e), 1)
             return
@@ -125,9 +128,7 @@ class TestController(QtCore.QThread):
                 self.log_signal.emit('Login in system complete')
                 return True
             else:
-                self.log_signal.emit('Login fail. Retry after 5 seconds ...')
-                time.sleep(5)
-                self.system_login()
+                raise ValueError('Login fail. Fix the problem and try again.')
 
 
     def send_com_command(self, cmd):
@@ -279,5 +280,9 @@ class TestController(QtCore.QThread):
             return 'PASS'
         return 'FAIL'
 
-    def get_parent(self):
-        return self.curr_parent
+    def test(self):
+        print(self.curr_test)
+
+        with futures.ThreadPoolExecutor(1) as executor:
+            print(self.curr_test)
+            executor.submit(self.curr_test.stop_test)
