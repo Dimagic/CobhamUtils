@@ -40,29 +40,15 @@ class FufuMtdi(QtCore.QThread):
         self.current_test_name = name
 
     def start_current_test(self, test):
-        q = getattr(self, test)()
+        test_result = getattr(self, test)()
         self.controller.send_test_name(self.current_test_name, 'Completed\n')
-        if not q:
+        if not test_result:
             q = self.controller.send_msg('w', 'Error', 'Tes {} fail'.format(test), 3)
             if q == QMessageBox.Cancel:
                 return
             if q == QMessageBox.Retry:
                 self.start_current_test(test)
-
-    def run_fufu(self):
-        methods = [method_name for method_name in dir(self) if callable(getattr(self, method_name))]
-        tests_queue = {}
-        for i in methods:
-            if 'run_test_' in i:
-                try:
-                    n = re.search('[\d]+$', i).group(0)
-                    tests_queue.update({int(n): i})
-                except:
-                    self.controller.send_msg('c', 'CobhamUtils', 'Not found queue number in method {}'.format(i), 1)
-                    return
-        keys = sorted(list(tests_queue.keys()))
-        for key in keys:
-            self.start_current_test(tests_queue.get(key))
+        return test_result
 
     def run_test_check_bands_10(self):
         self.set_test_name('Check bands')
@@ -188,19 +174,23 @@ class FufuMtdi(QtCore.QThread):
 
     def run_test_fft_calibrate_60(self):
         self.set_test_name('FFT calibration')
+        if self.bands is None:
+            self.bands = self.get_bands()
         fft = FftCalibrate(self.controller, self.bands)
-        fft.run_calibrate()
+        return fft.run_calibrate()
 
     def run_test_verify_connections_70(self):
         self.set_test_name('Verify connections')
-        status = 'PASS'
+        status = True
         master = True if 'DOBR-M' in self.controller.send_com_command('axsh get MDL') else False
         slave = True if 'DOBR-S' in self.controller.send_com_command('send_msg -d 172.24.30.2 -c "axsh get mdl"') else False
         if not master or not slave:
-            status = 'FAIL'
-        self.controller.log_signal.emit("Verify connections to both SDR'S: {}".format(status))
+            status = False
+        self.controller.log_signal.emit("Verify connections to both SDR'S: {}"
+                                        .format(self.controller.true_to_pass(status)))
         # self.db.set_test_result(self.__class__.__name__, inspect.currentframe().f_code.co_name, self.asis,
         #                         self.test_time, self.controller.true_to_pass(status))
+        return status
 
     def run_test_swv_80(self):
         self.set_test_name('SW version verification')
@@ -210,24 +200,27 @@ class FufuMtdi(QtCore.QThread):
         master_model = self.controller.send_com_command('axsh get mdl')
         master_versions = self.controller.send_com_command('axsh get swv')
         master_patch = self.controller.send_com_command('get_patches.sh')
-        print(master_model)
-        print(master_versions)
-        print(master_patch)
-        res = 'PASS'
+        status_master = True
         if not self.check_sw(need_sw, master_versions) or not self.check_sw(need_patch, master_patch):
-            res = 'FAIL'
-        print('SW ver. verification on board {}: {}'.format(master_model, res))
+            status_master = False
+        self.controller.log_signal.emit('SW ver. verification on board {}: {}'
+                                        .format(master_model.strip(), self.controller.true_to_pass(status_master)))
 
         slave_model = self.controller.send_com_command('send_msg -d 172.24.30.2 -c "axsh get mdl"').strip()
         slave_versions = self.controller.send_com_command('send_msg -d 172.24.30.2 -c "axsh get swv"')
         slave_path = self.controller.send_com_command('send_msg -d 172.24.30.2 -c "get_patches.sh"')
-        res = 'PASS'
+        status_slave = True
         if not self.check_sw(need_sw, slave_versions) or not self.check_sw(need_patch, slave_path):
-            res = 'FAIL'
-        self.controller.log_signal.emit('SW ver. verification on board {}: {}'.format(slave_model, res))
+            status_slave = False
+        self.controller.log_signal.emit('SW ver. verification on board {}: {}'
+                                        .format(slave_model.strip(), self.controller.true_to_pass(status_slave)))
+        return any([status_master, status_slave])
 
     def run_test_mute_90(self):
         self.set_test_name('System mute')
+        status = True
+        if self.bands is None:
+            self.bands = self.get_bands()
         for band in range(1, len(self.bands) + 1):
             self.controller.log_signal.emit('Set band {} Transmission: Disable'.format(self.bands[band - 1]))
             self.controller.send_com_command('dobr_pa_control SET {} {}'.format(band, 0))
@@ -235,17 +228,18 @@ class FufuMtdi(QtCore.QThread):
         self.set_filters(0)
 
         answer = self.controller.send_msg('i', 'Mute test', 'Is all leds on the rf boards are RED?', 2)
-        if answer == QMessageBox.Ok:
-            status = 'PASS'
-        else:
-            status = 'FAIL'
+        if answer != QMessageBox.Ok:
+            status = False
 
         for band in range(1, len(self.bands) + 1):
             self.controller.log_signal.emit('Set band {} Transmission: Enable'.format(self.bands[band - 1]))
             self.controller.send_com_command('dobr_pa_control SET {} {}'.format(band, 1))
         self.set_filters(1)
-        # self.db.set_test_result(self.__class__.__name__, inspect.currentframe().f_code.co_name, self.asis,
-        #                         self.test_time, self.controller.true_to_pass(status))
+
+        answer = self.controller.send_msg('i', 'Mute test', 'Is all leds on the rf boards are GREEN?', 2)
+        if answer != QMessageBox.Ok:
+            status = False
+        return status
 
     def run_test_ext_alarm_100(self):
         self.set_test_name('External alarms')
@@ -272,7 +266,7 @@ class FufuMtdi(QtCore.QThread):
         self.controller.log_signal.emit('External alarms: {}'.format(status))
         # self.db.set_test_result(self.__class__.__name__, inspect.currentframe().f_code.co_name, self.asis,
         #                         self.test_time, self.controller.true_to_pass(status))
-        return status
+        return all(res_list)
 
     def run_test_gpr_gps_110(self):
         self.set_test_name('GPS & GPRS')
@@ -368,6 +362,8 @@ class FufuMtdi(QtCore.QThread):
                 self.clear_log()
             elif q == QMessageBox.Cancel:
                 return False
+        else:
+            return True
 
     def set_assembly(self):
         db = CobhamDB()
@@ -411,6 +407,8 @@ class FufuMtdi(QtCore.QThread):
 
     def get_bands_sn(self):
         sn_list = {}
+        if self.bands is None:
+            self.bands = self.get_bands()
         for i, j in enumerate(self.bands):
             n = i%2
             while 1:

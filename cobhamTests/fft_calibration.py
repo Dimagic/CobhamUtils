@@ -12,7 +12,7 @@ class FftCalibrate:
     def __init__(self, controller, bands):
         self.controller = controller
         self.bands = bands
-        self.test_status = 'PASS'
+        self.test_status = True
         self.instr = Instruments(controller=self.controller)
         self.db = CobhamDB()
         self.instr.genPreset()
@@ -56,7 +56,8 @@ class FftCalibrate:
         if q == QMessageBox.Ok:
             for i in self.band_uldl.keys():
                 self.get_peak(i, 0)
-        self.controller.log_signal.emit('FFT calibration: {}'.format(self.test_status))
+        self.controller.log_signal.emit('FFT calibration: {}'.format(self.controller.true_to_pass(self.test_status)))
+        return self.test_status
 
     def get_peak(self, band_number, uldl):
         try:
@@ -83,7 +84,7 @@ class FftCalibrate:
 
             fft_delta = abs(202 - abs(curr_fft))
             if fft_delta > 10:
-                self.test_status = 'FAIL'
+                self.test_status = False
             self.controller.log_signal.emit('{} {} FFT = {} Gain = {} '.format(res.get('band'), uldl_name, fft, gain))
             self.instr.gen.write(":OUTP:STAT OFF")
         except Exception as e:

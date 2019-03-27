@@ -30,6 +30,7 @@ class TestController(QtCore.QThread):
     input_signal = QtCore.pyqtSignal(str)
     set_label_signal = QtCore.pyqtSignal(str, str)
     check_com_signal = QtCore.pyqtSignal(bool)
+    test_result_signal = QtCore.pyqtSignal(int, bool)
 
     def __init__(self, parent=None, **kwargs):
         QtCore.QThread.__init__(self, parent)
@@ -42,6 +43,9 @@ class TestController(QtCore.QThread):
         self.curr_test = None
         self.db = CobhamDB()
 
+    """
+    Run selected tests or calibration
+    """
     def run(self):
         try:
             if not Instruments(controller=self).check_instr():
@@ -53,10 +57,16 @@ class TestController(QtCore.QThread):
                     self.send_msg('w', 'CobhamUtils', 'System login fail', 1)
                     return
                 self.get_ip()
-                # self.get_bands()
 
                 self.curr_test = FufuMtdi(self)
-                self.curr_test.run_fufu()
+                count = self.curr_parent.w_main.tests_tab.rowCount()
+                for x in range(0, count):
+                    test = self.curr_parent.w_main.tests_tab.item(x, 1).text()
+                    is_enable = self.curr_parent.w_main.tests_tab.item(x, 0).checkState()
+                    if is_enable == 2:
+                        result = self.curr_test.start_current_test(test)
+                        self.test_result_signal.emit(x, result)
+
             if self.type_test == 'calibration':
                 self.curr_test = Calibration(controller=self)
                 self.curr_test.run_calibration()

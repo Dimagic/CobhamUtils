@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import threading
 import time
@@ -10,8 +11,9 @@ from concurrent import futures
 from PyQt5 import uic, QtGui, QtWidgets, QtCore
 from PyQt5.QtCore import QObject, QSize
 from PyQt5.QtGui import QMovie
-from PyQt5.QtWidgets import QMainWindow, QMessageBox, QInputDialog
+from PyQt5.QtWidgets import QMainWindow, QMessageBox, QInputDialog, QTableWidgetItem, QHeaderView, QWidget
 
+from cobhamTests.fufu_MtdiDoha import FufuMtdi
 from utils.comPorts import ComPort
 from cobhamGui.w_calibration import WindowCalibration
 from cobhamGui.w_settings import WindowSettings
@@ -19,7 +21,7 @@ from cobhamTests.test_controller import TestController
 from database.cobhamdb import CobhamDB
 
 
-VERSION = '0.4'
+VERSION = '0.4.1'
 class EventListener(QtCore.QThread):
     timer_signal = QtCore.pyqtSignal(float)
     def __init__(self, parent):
@@ -75,7 +77,11 @@ class MainApp(QMainWindow, QObject):
         self.blueLedMovie = QMovie('Img/blueLed.gif')
         self.redLedMovie = QMovie('Img/redLed.gif')
 
+        self.passLedMovie = QMovie('Img/pass_1.gif')
+        self.passLedMovie.setScaledSize(QSize(13, 13))
+
         self.w_main.start_test_btn.clicked.connect(self.test)
+        self.w_main.selectall_chbox.clicked.connect(self.select_all)
         self.w_main.calibration_btn.clicked.connect(self.calibration)
         self.w_main.menu_Settings.triggered.connect(self.window_settings)
         self.w_main.menu_Quit.triggered.connect(self.w_main.close)
@@ -83,6 +89,7 @@ class MainApp(QMainWindow, QObject):
 
         self.check_com(False)
         self.check_calibration()
+        self.fill_test_tab()
 
         self.w_main.show()
 
@@ -91,6 +98,57 @@ class MainApp(QMainWindow, QObject):
         self.c_thread.timer_signal.connect(self.set_timer, QtCore.Qt.QueuedConnection)
         self.c_thread.start()
 
+    def fill_test_tab(self):
+        self.w_main.tests_tab.setColumnCount(3)
+        self.w_main.tests_tab.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.w_main.tests_tab.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.w_main.tests_tab.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+
+        self.w_main.tests_tab.setHorizontalHeaderLabels(["", "Test name", "Status"])
+        # self.w_main.tests_tab.horizontalHeaderItem(0).setToolTip("Column 1 ")
+        # self.w_main.tests_tab.horizontalHeaderItem(1).setToolTip("Column 2 ")
+
+        test_dict = self.get_tests_queue(FufuMtdi)
+        keys = sorted(list(test_dict.keys()))
+        for key in keys:
+            rowPosition = self.w_main.tests_tab.rowCount()
+            chkBoxItem = QTableWidgetItem()
+            chkBoxItem.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled)
+            chkBoxItem.setCheckState(QtCore.Qt.Checked)
+
+            self.w_main.tests_tab.insertRow(rowPosition)
+            self.w_main.tests_tab.setItem(rowPosition, 0, chkBoxItem)
+            self.w_main.tests_tab.setItem(rowPosition, 1, QTableWidgetItem(test_dict.get(key)))
+            self.w_main.tests_tab.setItem(rowPosition, 2, None)
+
+    def set_test_status(self, rowPosition, status):
+        if status:
+            result = QTableWidgetItem(QtGui.QIcon(self.passImg), "")
+        else:
+            result = QTableWidgetItem(QtGui.QIcon(self.failImg), "")
+        self.w_main.tests_tab.setItem(rowPosition, 2, result)
+
+    def get_tests_queue(self, object):
+        methods = [method_name for method_name in dir(object) if callable(getattr(object, method_name))]
+        tests_queue = {}
+        for i in methods:
+            if 'run_test_' in i:
+                try:
+                    n = re.search('[\d]+$', i).group(0)
+                    tests_queue.update({int(n): i})
+                except:
+                    self.send_msg('c', 'CobhamUtils', 'Not found queue number in method {}'.format(i), 1)
+                    return
+        return tests_queue
+
+    def select_all(self):
+        self.w_main.comstat_lbl.setMovie(self.passLedMovie)
+        self.passLedMovie.start()
+
+        state = self.w_main.selectall_chbox.checkState()
+        count = self.w_main.tests_tab.rowCount()
+        for x in range(0, count):
+            self.w_main.tests_tab.item(x, 0).setCheckState(state)
 
     def check_com(self, val):
         self.w_main.port_lbl.setText(self.db.get_settings_by_name('combo_com'))
@@ -150,6 +208,10 @@ class MainApp(QMainWindow, QObject):
         self.w_main.ser_lbl.setText('')
         self.w_main.ip_lbl.setText('')
         self.w_main.list_log.clear()
+        count = self.w_main.tests_tab.rowCount()
+        for rowPosition in range(0, count):
+            self.w_main.tests_tab.setItem(rowPosition, 2, None)
+
         if kwargs.get('type_test') == 'test':
             val = self.input_msg('Scan SN:')
             if val is None:
@@ -174,6 +236,7 @@ class MainApp(QMainWindow, QObject):
         self.controller_thread.input_signal.connect(self.input_msg, QtCore.Qt.QueuedConnection)
         self.controller_thread.set_label_signal.connect(self.set_label_text, QtCore.Qt.QueuedConnection)
         self.controller_thread.check_com_signal.connect(self.check_com, QtCore.Qt.QueuedConnection)
+        self.controller_thread.test_result_signal.connect(self.set_test_status, QtCore.Qt.QueuedConnection)
         self.controller_thread.start()
 
     def window_settings(self):
@@ -238,7 +301,6 @@ class MainApp(QMainWindow, QObject):
         # if okPressed and text != '':
         #     return text
         # return None
-
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
