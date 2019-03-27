@@ -4,10 +4,12 @@ kiwisolver==1.0.1
 matplotlib==3.0.3
 numpy==1.16.2
 Pillow==5.4.1
+psutil==5.6.1
 pyparsing==2.3.1
 pypiwin32==223
 PyQt5==5.11.3
 PyQt5-sip==4.19.13
+pyqtgraph==0.10.0
 pyserial==3.4
 python-dateutil==2.8.0
 PyVISA==1.9.1
