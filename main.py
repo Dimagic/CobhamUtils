@@ -77,9 +77,6 @@ class MainApp(QMainWindow, QObject):
         self.blueLedMovie = QMovie('Img/blueLed.gif')
         self.redLedMovie = QMovie('Img/redLed.gif')
 
-        self.passLedMovie = QMovie('Img/pass_1.gif')
-        self.passLedMovie.setScaledSize(QSize(13, 13))
-
         self.w_main.start_test_btn.clicked.connect(self.test)
         self.w_main.selectall_chbox.clicked.connect(self.select_all)
         self.w_main.calibration_btn.clicked.connect(self.calibration)
@@ -142,9 +139,6 @@ class MainApp(QMainWindow, QObject):
         return tests_queue
 
     def select_all(self):
-        self.w_main.comstat_lbl.setMovie(self.passLedMovie)
-        self.passLedMovie.start()
-
         state = self.w_main.selectall_chbox.checkState()
         count = self.w_main.tests_tab.rowCount()
         for x in range(0, count):
