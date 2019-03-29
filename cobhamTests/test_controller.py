@@ -12,7 +12,7 @@ import serial
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QMessageBox
 
-from cobhamTests.fufu_MtdiDoha import FufuMtdi
+from cobhamTests.fufu_MtdiDoha import FufuiDOBR
 from database.cobhamdb import CobhamDB
 from utils.calibration import Calibration
 from utils.comPorts import ComPort
@@ -50,7 +50,7 @@ class TestController(QtCore.QThread):
         try:
             if not Instruments(controller=self).check_instr():
                 return
-            if self.type_test == 'test':
+            if self.type_test == 'FufuiDOBR':
                 if not self.curr_parent.check_calibration():
                     return
                 if not self.system_login():
@@ -58,10 +58,15 @@ class TestController(QtCore.QThread):
                     return
                 self.get_ip()
 
-                self.curr_test = FufuMtdi(self)
+                self.curr_test = FufuiDOBR(self)
                 count = self.curr_parent.w_main.tests_tab.rowCount()
+                tests_queue = self.curr_parent.tests_queue
                 for x in range(0, count):
-                    test = self.curr_parent.w_main.tests_tab.item(x, 1).text()
+                    tmp = self.curr_parent.w_main.tests_tab.item(x, 1).text()
+                    for i in list(tests_queue.values()):
+                        if i[0] == tmp:
+                            test = i[1]
+                            break
                     is_enable = self.curr_parent.w_main.tests_tab.item(x, 0).checkState()
                     if is_enable == 2:
                         result = self.curr_test.start_current_test(test)

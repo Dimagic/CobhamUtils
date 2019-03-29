@@ -17,7 +17,7 @@ INSTRUMENTS = 'instruments'
 CALIBRATION = 'calibr'
 IDOBR_RF = 'idobr_rf'
 IDOBR_RF_TYPE = 'idobr_rf_type'
-IDOBR_TYPE = 'idobr_type'
+IDOBR_TYPE = 'system_type'
 SDR_TYPE = 'sdr_type'
 IDOBR = 'idobr'
 SDR = 'sdr'
@@ -103,7 +103,7 @@ class CobhamDB:
 
         idobr = Table(IDOBR, metadata,
                          Column('id', Integer, primary_key=True),
-                         Column('type', None, ForeignKey('idobr_type.type')),
+                         Column('type', None, ForeignKey('system_type.type')),
                          Column('master_sdr', None, ForeignKey('sdr.asis')),
                          Column('slave_sdr', None, ForeignKey('sdr.asis')),
                          Column('sn', String, nullable=False, unique=True),
@@ -237,6 +237,16 @@ class CobhamDB:
             else:
                 self.execute_query("UPDATE settings SET value = '{}' WHERE param = '{}'".format(val, key))
 
+    def get_idobr_by_asis(self, asis):
+        tmp = self.select_query("SELECT asis, type, sn FROM idobr WHERE asis = '{}'".format(asis))
+        if len(tmp) == 0:
+            return
+        else:
+            tmp = tmp[0]
+        return {'asis': tmp[0], 'type': tmp[1], 'sn': tmp[2]}
+
+
+
     def get_all_data(self, table='', query=''):
         query = query if query != '' else "SELECT * FROM '{}';".format(table)
         for_return = {}
@@ -297,7 +307,7 @@ class CobhamDB:
             print(e)
 
     def set_idobr(self, assembly):
-        # print(assembly)
+        print(assembly)
         idobr = assembly.get('idobr')
         rf_master = assembly.get('rf_master')
         rf_slave = assembly.get('rf_slave')
@@ -320,15 +330,16 @@ class CobhamDB:
         self.set_sdr(assembly.get('master_sdr').get('type'), assembly.get('master_sdr').get('asis'), rf_master)
         self.set_sdr(assembly.get('slave_sdr').get('type'), assembly.get('slave_sdr').get('asis'), rf_slave)
 
-        q = self.select_query("SELECT type FROM idobr_type WHERE type = '{}' LIMIT 1".format(idobr.get('type')))
+        q = self.select_query("SELECT type FROM system_type WHERE type = '{}' LIMIT 1".format(idobr.get('type')))
         if len(q) == 0:
-            self.execute_query("INSERT INTO idobr_type (type) VALUES ('{}')".format(idobr.get('type')))
-            q = self.select_query("SELECT type FROM idobr_type WHERE type = '{}' LIMIT 1".format(idobr.get('type')))
+            self.execute_query("INSERT INTO system_type (type) VALUES ('{}')".format(idobr.get('type')))
+            q = self.select_query("SELECT type FROM system_type WHERE type = '{}' LIMIT 1".format(idobr.get('type')))
         try:
             q = q[0][0]
-            self.execute_query("INSERT INTO idobr (type, master_sdr, slave_sdr, asis) VALUES ('{}', '{}', '{}', '{}')".
+            self.execute_query("INSERT INTO idobr (type, master_sdr, slave_sdr, asis, sn) "
+                               "VALUES ('{}', '{}', '{}', '{}', '{}')".
                                format(q, assembly.get('master_sdr').get('asis'),
-                                      assembly.get('slave_sdr').get('asis'), idobr.get('asis')))
+                                      assembly.get('slave_sdr').get('asis'), idobr.get('asis'), idobr.get('sn')))
             return True
         except Exception as e:
             print(e)

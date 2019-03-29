@@ -1,4 +1,6 @@
 import os
+import re
+import socket
 import threading
 import time
 
@@ -26,12 +28,10 @@ class CheckStorm(threading.Thread):
     def run(self):
         startTime = time.time()
         while True:
-            currTime = time.time()
-            delta = float(currTime - startTime)
+
             tmp = application.findwindows.find_windows(title=u'StormInterface.exe')
             dialog = application.findwindows.find_windows(title=u'Save As')
             # stdout.write('\rSaving set file for band {}: {}'.format(self.band, str(delta)))
-            self.controller.timer_signal.emit(delta)
             time.sleep(.5)
             if len(tmp) > 0:
                 window = self.app.Dialog
@@ -54,8 +54,15 @@ class Storm:
         self.stormpath = self.settings.get('storm_path')
         self.bands = bands
         self.bands_sn = bands_sn
-        self.conn_loc_ip = '192.168.1.2'
-        self.conn_rem_ip = '192.168.1.253'
+        self.conn_rem_ip = '192.168.152.1'
+        self.conn_loc_ip = '192.168.152.2'
+        # self.conn_loc_ip = self.get_self_ip()
+
+    def get_self_ip(self):
+        sys_ip = re.search('^[0-9]{1,3}[.]', self.conn_rem_ip).group(0)
+        return (([ip for ip in socket.gethostbyname_ex(socket.gethostname())[2] if ip.startswith(sys_ip)] or [
+            [(s.connect(("8.8.8.8", 53)), s.getsockname()[0], s.close()) for s in
+             [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]]) + ["no IP found"])[0]
 
     def save_setfile(self, place, band):
         app, wnd_main = self.run_storm()

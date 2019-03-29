@@ -24,12 +24,15 @@ class Config:
     def cfg_read(self, **kwargs):
         try:
             file = kwargs.get('file')
+            section = kwargs.get('section')
             if not file:
                 file = self.configFile
+            if not section:
+                section = self.section
             tmp = {}
             self.config.read(file, encoding='utf-8-sig')
-            for i in self.config[self.section]:
-                tmp.update({i: self.config.get(self.section, i)})
+            for i in self.config[section]:
+                tmp.update({i.upper(): self.config.get(section, i)})
             return tmp
         except Exception as e:
             self.parent.send_msg('w', 'Import error', str(e), 1)

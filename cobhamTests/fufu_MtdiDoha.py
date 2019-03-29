@@ -11,7 +11,7 @@ from utils.instruments import Instruments
 from utils.storm import Storm
 
 
-class FufuMtdi(QtCore.QThread):
+class FufuiDOBR(QtCore.QThread):
     def __init__(self, controller, parent=None):
         QtCore.QThread.__init__(self, parent)
         self._stopFlag = False
@@ -19,7 +19,7 @@ class FufuMtdi(QtCore.QThread):
         self.parent = controller.curr_parent
         self.db = CobhamDB()
         self.db.set_test_type(self.__class__.__name__)
-        self.asis = self.parent.w_main.ser_lbl.text()
+        self.asis = self.parent.w_main.asis_lbl.text()
         self.test_time = datetime.now().strftime("%Y/%m/%d/, %H:%M:%S")
         self.bands = None
         self.bands_sn = None
@@ -43,14 +43,28 @@ class FufuMtdi(QtCore.QThread):
         test_result = getattr(self, test)()
         self.controller.send_test_name(self.current_test_name, 'Completed\n')
         if not test_result:
-            q = self.controller.send_msg('w', 'Error', 'Tes {} fail'.format(test), 3)
+            # ToDo: test not wait answer???
+            q = self.controller.send_msg('w', 'Error', 'Test {} fail'.format(test), 3)
             if q == QMessageBox.Cancel:
                 return
             if q == QMessageBox.Retry:
                 self.start_current_test(test)
         return test_result
 
-    def run_test_check_bands_10(self):
+    def run_test_verify_connections_10(self):
+        self.set_test_name('Verify connections')
+        status = True
+        master = True if 'DOBR-M' in self.controller.send_com_command('axsh get MDL') else False
+        slave = True if 'DOBR-S' in self.controller.send_com_command('send_msg -d 172.24.30.2 -c "axsh get mdl"') else False
+        if not master or not slave:
+            status = False
+        self.controller.log_signal.emit("Verify connections to both SDR'S: {}"
+                                        .format(self.controller.true_to_pass(status)))
+        # self.db.set_test_result(self.__class__.__name__, inspect.currentframe().f_code.co_name, self.asis,
+        #                         self.test_time, self.controller.true_to_pass(status))
+        return False
+
+    def run_test_check_bands_20(self):
         self.set_test_name('Check bands')
         # ToDo: temporary values
         # self.bands = ['ABCD18', 'ABCD08', 'ABCD09', 'ABCD21']
@@ -79,11 +93,13 @@ class FufuMtdi(QtCore.QThread):
         #                         self.test_time, self.controller.true_to_pass(status))
         return status
 
-    def run_test_save_set_file_20(self):
+    def run_test_save_set_file_30(self):
         self.set_test_name('Save set file')
         q = self.controller.send_msg('q', 'Cobham utils', 'Do you want to save set files?', 2)
         if q != QMessageBox.Ok:
             return True
+        if self.bands is None or self.bands_sn is None:
+            self.bands = self.get_bands()
         self.controller.send_com_command('udp_bridge1 restart')
         self.controller.log_signal.emit("Starting udp_bridge")
         storm = Storm(controller=self.controller, bands=self.bands, bands_sn=self.bands_sn)
@@ -93,7 +109,7 @@ class FufuMtdi(QtCore.QThread):
         self.controller.send_com_command('udp_bridge1 stop')
         self.controller.log_signal.emit("Stoping udp_bridge")
 
-    def run_test_band_status_30(self):
+    def run_test_band_status_40(self):
         self.set_test_name('Band status')
         tmp = self.controller.send_com_command('dobrstatus --json')
         res = self.controller.str_to_dict(tmp)
@@ -115,11 +131,11 @@ class FufuMtdi(QtCore.QThread):
         #                         self.test_time, self.controller.true_to_pass(status))
         return status
 
-    def run_test_enable_felters_40(self):
+    def run_test_set_filters_50(self):
         self.set_test_name('Set filters')
         return self.set_filters(1)
 
-    def run_test_composite_power_50(self):
+    def run_test_composite_power_60(self):
         self.set_test_name('Composite power')
         test_status = True
         try:
@@ -172,27 +188,16 @@ class FufuMtdi(QtCore.QThread):
         except Exception as e:
             raise e
 
-    def run_test_fft_calibrate_60(self):
+    def run_test_fft_calibrate_70(self):
         self.set_test_name('FFT calibration')
         if self.bands is None:
             self.bands = self.get_bands()
         fft = FftCalibrate(self.controller, self.bands)
         return fft.run_calibrate()
 
-    def run_test_verify_connections_70(self):
-        self.set_test_name('Verify connections')
-        status = True
-        master = True if 'DOBR-M' in self.controller.send_com_command('axsh get MDL') else False
-        slave = True if 'DOBR-S' in self.controller.send_com_command('send_msg -d 172.24.30.2 -c "axsh get mdl"') else False
-        if not master or not slave:
-            status = False
-        self.controller.log_signal.emit("Verify connections to both SDR'S: {}"
-                                        .format(self.controller.true_to_pass(status)))
-        # self.db.set_test_result(self.__class__.__name__, inspect.currentframe().f_code.co_name, self.asis,
-        #                         self.test_time, self.controller.true_to_pass(status))
-        return status
 
-    def run_test_swv_80(self):
+
+    def run_test_sw_verification_80(self):
         self.set_test_name('SW version verification')
         need_sw = self.db.get_all_data('settings').get('sw_version').split(';')
         need_patch = self.db.get_all_data('settings').get('patch_version').split(';')
@@ -256,7 +261,7 @@ class FufuMtdi(QtCore.QThread):
                     self.controller.log_signal.emit('EXT{} alarm: PASS'.format(pin))
                     break
                 else:
-                    self.controller.send_msg('i', 'Alarms test', 'Short pin {} to the chassis'.format(pin), 1)
+                    # self.controller.send_msg('i', 'Alarms test', 'Short pin {} to the chassis'.format(pin), 1)
                     counter -= 1
                     if counter < 0:
                         res_list.append(False)
@@ -322,7 +327,7 @@ class FufuMtdi(QtCore.QThread):
         self.controller.log_signal.emit('Disable Remote and Modem Communication: {}'.format(self.set_remote_communication(0)))
         self.controller.send_msg('i', 'GPR & GPS', 'Disconnect GPS and GPR antenna, and replace sim card', 1)
 
-    def run_test_set_ip_120(self):
+    def run_test_set_static_ip_120(self):
         self.set_test_name('Set static IP')
         ip = self.db.get_all_data('settings').get('ip')
         mask = self.db.get_all_data('settings').get('mask')
@@ -359,7 +364,7 @@ class FufuMtdi(QtCore.QThread):
         if num_logs != '0':
             q = self.controller.send_msg('w', 'Clear logs', 'Not all logs deleted.', 3)
             if q == QMessageBox.Retry:
-                self.clear_log()
+                self.run_test_clear_log_130()
             elif q == QMessageBox.Cancel:
                 return False
         else:
@@ -371,13 +376,13 @@ class FufuMtdi(QtCore.QThread):
         # assembly.update(self.controller.get_sdr_info())
         # assembly.update({'rf_master': self.sn_list_master})
         # assembly.update({'rf_slave': self.sn_list_slave})
-        # assembly.update({'idobr': {'type': self.parent.idobr_type, 'asis': self.parent.idobr_asis}})
+        # assembly.update({'idobr': {'type': self.parent.system_type, 'asis': self.parent.system_asis}})
         # ToDo: temporary values
         assembly = {'master_sdr': {'type': 'DM00033F', 'asis': 'NLXP'},
                     'slave_sdr': {'type': 'DM000871', 'asis': 'NM1Y'},
                     'rf_master': {'ABCD18': 'NRHC', 'ABCD08': 'NPF6'},
                     'rf_slave': {'ABCD09': 'NRHU', 'ABCD21': 'NK8N'},
-                    'idobr': {'type': 'DOBR0292', 'asis': 'NUES'}}
+                    'idobr': {'type': 'DOBR0292', 'asis': 'NUES', 'sn': '112018000024'}}
         if db.set_idobr(assembly):
             self.controller.log_signal.emit('Creating assembly completed')
         else:
