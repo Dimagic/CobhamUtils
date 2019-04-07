@@ -16,7 +16,7 @@ class FftCalibrate:
         self.instr = Instruments(controller=self.controller)
         self.db = CobhamDB()
         self.instr.genPreset()
-        self.instr.saPreset()
+        # self.instr.saPreset()
         # {band_number: [UL, DL]}
         self.band_uldl = {}
         self.band_fft = {1: [2, 3], 2: [0, 1], 3: [6, 7], 4: [4, 5]}
@@ -47,12 +47,12 @@ class FftCalibrate:
                         raise ValueError()
                     self.band_uldl.update({n: [ul_center, dl_center]})
         q = self.controller.send_msg('i', 'FFT calibration',
-                                     'Connect Generator to Base, Spectrum to Mobile using attenuators 30 dB', 1)
+                                     'Connect Generator to the Base port using attenuators 30 dB', 1)
         if q == QMessageBox.Ok:
             for i in self.band_uldl.keys():
                 self.get_peak(i, 1)
         q = self.controller.send_msg('i', 'FFT calibration',
-                                     'Connect Spectrum to Base, Generator to Mobile using attenuators 30 dB', 1)
+                                     'Connect Generator to the Mobile port using attenuators 30 dB', 1)
         if q == QMessageBox.Ok:
             for i in self.band_uldl.keys():
                 self.get_peak(i, 0)
@@ -67,7 +67,7 @@ class FftCalibrate:
                 uldl_name = 'Downlink'
             center_freq = self.band_uldl.get(band_number)[uldl]
             offset = self.db.get_offset(center_freq)
-            self.instr.sa.write(":SENSE:FREQ:center {} MHz".format(center_freq))
+            # self.instr.sa.write(":SENSE:FREQ:center {} MHz".format(center_freq))
             self.instr.gen.write(":FREQ:FIX {} MHz".format(center_freq))
             self.instr.gen.write("POW:AMPL {} dBm".format(-60 + offset.get('gen')))
             self.instr.gen.write(":OUTP:STAT ON")

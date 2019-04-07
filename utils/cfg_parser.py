@@ -32,7 +32,9 @@ class Config:
             tmp = {}
             self.config.read(file, encoding='utf-8-sig')
             for i in self.config[section]:
-                tmp.update({i.upper(): self.config.get(section, i)})
+                if section != "SETTINGS_BACKUP":
+                    i = i.upper()
+                tmp.update({i: self.config.get(section, i)})
             return tmp
         except Exception as e:
             self.parent.send_msg('w', 'Import error', str(e), 1)

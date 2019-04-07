@@ -3,7 +3,7 @@ import inspect
 from PyQt5 import uic, QtWidgets, QtCore
 from PyQt5.QtCore import QRegExp
 from PyQt5.QtGui import QRegExpValidator
-from PyQt5.QtWidgets import QDialog, QComboBox, QLineEdit, QFileDialog
+from PyQt5.QtWidgets import QDialog, QComboBox, QLineEdit, QFileDialog, QRadioButton
 
 from database.cobhamdb import CobhamDB
 from utils.cfg_parser import Config
@@ -83,9 +83,11 @@ class WindowSettings(QDialog):
         for_query = {}
         values = self.gui_read()
         for _v in values.keys():
+            print(_v)
             for_query.update({_v: values.get(_v)[0]})
         self.db.save_settings(for_query)
         self.parent.check_com(False)
+        self.parent.check_calibration()
         self.w_settings.close()
 
     def verify_settings(self):
@@ -98,6 +100,7 @@ class WindowSettings(QDialog):
     def gui_write(self, for_write):
         struct = self.gui_read()
         for _v in for_write.keys():
+            _v = _v.lower()
             try:
                 obj = struct.get(_v)[2]
                 if obj.__class__ is QComboBox:
@@ -109,9 +112,14 @@ class WindowSettings(QDialog):
                         obj.setCurrentIndex(obj.count()-1)
                 if obj.__class__ is QLineEdit:
                     obj.setText(for_write.get(_v))
+                if obj.__class__ is QRadioButton:
+                    if for_write.get(_v).lower() == '1':
+                        obj.setChecked(True)
             except Exception as e:
                 raise e
         self.parent.check_com(False)
+
+
     '''
     Fill dictionary with checked values
     '''
@@ -124,6 +132,9 @@ class WindowSettings(QDialog):
                     for_return.update({i[0]: [i[1].currentText(), i[1].__class__.__name__, i[1]]})
                 if i[1].__class__ is QLineEdit:
                     for_return.update({i[0]: [i[1].text(), i[1].__class__.__name__, i[1]]})
+                if i[1].__class__ is QRadioButton:
+                    n = 1 if i[1].isChecked() else 0
+                    for_return.update({i[0]: [n, i[1].__class__.__name__, i[1]]})
             except:
                 continue
         return for_return

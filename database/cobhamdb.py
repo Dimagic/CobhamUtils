@@ -16,9 +16,6 @@ SETTINGS = 'settings'
 INSTRUMENTS = 'instruments'
 CALIBRATION = 'calibr'
 IDOBR_RF = 'idobr_rf'
-IDOBR_RF_TYPE = 'idobr_rf_type'
-IDOBR_TYPE = 'system_type'
-SDR_TYPE = 'sdr_type'
 IDOBR = 'idobr'
 SDR = 'sdr'
 
@@ -72,30 +69,15 @@ class CobhamDB:
                           Column('sa2gen', Float)
                           )
 
-        idobr_rf_type = Table(IDOBR_TYPE, metadata,
-                         Column('id', Integer, primary_key=True),
-                         Column('type', String, nullable=False, unique=True),
-                         )
-
-        idobr_type = Table(IDOBR_RF_TYPE, metadata,
-                              Column('id', Integer, primary_key=True),
-                              Column('type', String, nullable=False, unique=True),
-                              )
-
-        sdr_type = Table(SDR_TYPE, metadata,
-                           Column('id', Integer, primary_key=True),
-                           Column('type', String, nullable=False, unique=True),
-                           )
-
         idobr_rf = Table(IDOBR_RF, metadata,
                          Column('id', Integer, primary_key=True),
-                         Column('type', None, ForeignKey('idobr_rf_type.type')),
+                         Column('type', String, nullable=False),
                          Column('asis', String, nullable=False, unique=True),
                          )
 
         sdr = Table(SDR, metadata,
                          Column('id', Integer, primary_key=True),
-                         Column('type', None, ForeignKey('sdr_type.type')),
+                         Column('type', String, nullable=False),
                          Column('rf_1', None, ForeignKey('idobr_rf.asis')),
                          Column('rf_2', None, ForeignKey('idobr_rf.asis')),
                          Column('asis', String, nullable=False, unique=True),
@@ -103,7 +85,7 @@ class CobhamDB:
 
         idobr = Table(IDOBR, metadata,
                          Column('id', Integer, primary_key=True),
-                         Column('type', None, ForeignKey('system_type.type')),
+                         Column('type', String, nullable=False),
                          Column('master_sdr', None, ForeignKey('sdr.asis')),
                          Column('slave_sdr', None, ForeignKey('sdr.asis')),
                          Column('sn', String, nullable=False, unique=True),
@@ -154,7 +136,8 @@ class CobhamDB:
                                "id integer PRIMARY KEY,"
                                "system_asis text NOT NULL,"
                                "date_test text NOT NULL,"
-                               "meas text NOT NULL,"
+                               "meas_name text NOT NULL,"
+                               "meas_func text NOT NULL,"
                                "status text NOT NULL,"
                                "FOREIGN KEY (system_asis) REFERENCES idobr (asis)"
                                ")".format(test_type))
@@ -174,7 +157,7 @@ class CobhamDB:
         return tmp.get(val)
 
     def clear_calibration(self):
-        self.execute_query("UPDATE settings SET last_calibr = ''")
+        self.execute_query("UPDATE settings SET value = '' where param = 'last_calibr'")
         self.execute_query("DELETE FROM {}".format(CALIBRATION))
 
     def set_calibration(self, calibr):
@@ -183,7 +166,8 @@ class CobhamDB:
             self.execute_query("INSERT OR REPLACE INTO calibr "
                                "(id, gen2sa, sa2gen) values "
                                "({}, {}, {})".format(i, val.get('gen2sa'), val.get('sa2gen')))
-        self.execute_query("UPDATE settings SET last_calibr = {}".format(time.strftime("%Y-%m-%d", time.gmtime())))
+        self.execute_query("UPDATE settings SET value = '{}' where param = 'last_calibr'".
+                           format(time.strftime("%Y-%m-%d", time.gmtime())))
 
     def get_offset(self, freq):
         offset = {}
@@ -221,7 +205,6 @@ class CobhamDB:
         range_offset = stop - start
         if range_offset < 0:
             tmp = numpy.arange(stop + range_offset / 100, start, abs(range_offset) / 100)
-            print(tmp)
             tmp = tmp[::-1]
         else:
             tmp = numpy.arange(start, stop, range_offset / 100)
@@ -237,15 +220,60 @@ class CobhamDB:
             else:
                 self.execute_query("UPDATE settings SET value = '{}' WHERE param = '{}'".format(val, key))
 
+    def get_idobr_assembly(self, asis):
+        assembly = {}
+        keys = ['sdr_type', 'sdr_asis', 'rf_asis', 'rf_type', 'idobr_type', 'idobr_sn', 'idobr_asis']
+        query = "select * from ("
+        for i in [1, 2]:
+            for j in ['master', 'slave']:
+                q_row = "select sdr.type, sdr.asis, sdr.rf_{} as rf_asis," \
+                        " idobr_rf.type as rf_type, idobr.type as sys_type, " \
+                        "idobr.sn, idobr.asis as sys_asis from sdr " \
+                        "inner join idobr_rf on sdr.rf_{} = idobr_rf.asis " \
+                        "inner join idobr on idobr.{}_sdr = sdr.asis\nunion all\n".format(i, i, j)
+                query = query + q_row
+        query = query + ")\nwhere sys_asis = '{}'".format(asis)
+        query = query.replace('union all\n)', ')')
+        for m, i in enumerate(self.select_query(query)):
+            for k, j in enumerate(i):
+                if keys[k] in ['sdr_type', 'sdr_asis'] and m > 1:
+                    continue
+                if 'idobr_' in keys[k]:
+                    key = keys[k]
+                else:
+                    key = "{}_{}".format(keys[k], m + 1)
+                assembly.update({key: j})
+        return assembly
+
     def get_idobr_by_asis(self, asis):
-        tmp = self.select_query("SELECT asis, type, sn FROM idobr WHERE asis = '{}'".format(asis))
+        assembly = {}
+        rows = 'asis,type,sn,master_sdr,slave_sdr'
+        rows_list = rows.split(',')
+        tmp = self.select_query("SELECT {} FROM idobr WHERE asis = '{}'".format(rows, asis))
         if len(tmp) == 0:
             return
         else:
             tmp = tmp[0]
-        return {'asis': tmp[0], 'type': tmp[1], 'sn': tmp[2]}
+        for i, j in enumerate(rows_list):
+            assembly.update({j: tmp[i]})
+        return assembly
 
+    def get_sdr_by_asis(self, asis):
+        keys = "type,rf_1,rf_2"
+        for_return = {}
+        q = self.select_query("select {} from sdr where asis = '{}'".format(keys, asis))[0]
+        for i, j in enumerate(keys.split(',')):
+            for_return.update({j: q[i]})
+        return for_return
 
+    def get_idobr_by_sn(self, sn):
+        tmp = self.select_query("SELECT asis, type, sn, master_sdr, slave_sdr "
+                                "FROM idobr WHERE sn = '{}'".format(sn))
+        if len(tmp) == 0:
+            return
+        else:
+            tmp = tmp[0]
+        return {'asis': tmp[0], 'type': tmp[1], 'sn': tmp[2], 'master_sdr': tmp[3], 'slave_sdr': tmp[4]}
 
     def get_all_data(self, table='', query=''):
         query = query if query != '' else "SELECT * FROM '{}';".format(table)
@@ -267,83 +295,94 @@ class CobhamDB:
         return {'port': port[0], 'baud': baud[0]}
 
 
-    def get_idobr_rf_type(self, type):
-        q = self.select_query("SELECT type FROM idobr_rf_type WHERE type = '{}' LIMIT 1".format(type))
-        if len(q) == 0:
-            self.execute_query("INSERT INTO idobr_rf_type (type) VALUES ('{}')".format(type))
-            q = self.select_query("SELECT type FROM idobr_rf_type WHERE type = '{}' LIMIT 1".format(type))
-            q = q[0][0]
-        else:
-            q = q[0][0]
-        print(q)
-        return q
-
     def set_idobr_rf(self, type, asis):
-        q = self.get_idobr_rf_type(type)
-        if q != type:
-            print(q, type)
-        try:
-            self.execute_query("INSERT INTO idobr_rf (type, asis) VALUES ('{}', '{}')".format(q, asis))
-        except Exception as e:
-            print(e)
+        if self.get_idobr_rf(asis) is None:
+            self.execute_query("INSERT INTO idobr_rf (type, asis) VALUES ('{}', '{}')".format(type, asis))
+
 
     def get_idobr_rf(self, asis):
         q = self.select_query("SELECT type FROM idobr_rf WHERE asis = '{}' LIMIT 1".format(asis))
+        print("rf -> {}".format(q))
         if len(q) == 0:
             return None
         return q
 
-    def set_sdr(self, type, asis, rf_list):
-        q = self.select_query("SELECT type FROM sdr_type WHERE type = '{}' LIMIT 1".format(type))
-        if len(q) == 0:
-            self.execute_query("INSERT INTO sdr_type (type) VALUES ('{}')".format(type))
-            q = self.select_query("SELECT type FROM sdr_type WHERE type = '{}' LIMIT 1".format(type))
+    def set_sdr(self, **kwargs):
         try:
-            rf_1 = list(rf_list.values())[0]
-            rf_2 = list(rf_list.values())[1]
+            sdr_type = kwargs.get("sdr_type")
+            sdr_asis = kwargs.get("sdr_asis")
+            rf_1 = list(kwargs.get("rf_list"))[0]
+            rf_2 = list(kwargs.get("rf_list"))[1]
             self.execute_query("INSERT INTO sdr (type, asis, rf_1, rf_2) VALUES ('{}', '{}', '{}', '{}')".
-                               format(q[0][0], asis, rf_1, rf_2))
+                               format(sdr_type, sdr_asis, rf_1, rf_2))
         except Exception as e:
             print(e)
 
-    def set_idobr(self, assembly):
-        print(assembly)
-        idobr = assembly.get('idobr')
-        rf_master = assembly.get('rf_master')
-        rf_slave = assembly.get('rf_slave')
-
-        for key in rf_master.keys():
-            q = self.get_idobr_rf_type(key)
-            if q != key:
-                print('ERROR: create rf type: {}'.format(key))
-
-        for key in rf_slave.keys():
-            q = self.get_idobr_rf_type(key)
-            if q != key:
-                print('ERROR: create rf type: {}'.format(key))
-
-        for key in assembly.get('rf_master'):
-            self.set_idobr_rf(key, rf_master.get(key))
-        for key in assembly.get('rf_slave'):
-            self.set_idobr_rf(key, rf_slave.get(key))
-
-        self.set_sdr(assembly.get('master_sdr').get('type'), assembly.get('master_sdr').get('asis'), rf_master)
-        self.set_sdr(assembly.get('slave_sdr').get('type'), assembly.get('slave_sdr').get('asis'), rf_slave)
-
-        q = self.select_query("SELECT type FROM system_type WHERE type = '{}' LIMIT 1".format(idobr.get('type')))
-        if len(q) == 0:
-            self.execute_query("INSERT INTO system_type (type) VALUES ('{}')".format(idobr.get('type')))
-            q = self.select_query("SELECT type FROM system_type WHERE type = '{}' LIMIT 1".format(idobr.get('type')))
+    def set_idobr_assembly(self, assembly):
+        idobr_type = assembly.get("idobr_type")
+        idobr_asis = assembly.get("idobr_asis")
+        idobr_sn = assembly.get("idobr_sn")
+        for i in range(1,5):
+            rf_type = assembly.get("rf_type_{}".format(i))
+            rf_asis = assembly.get("rf_asis_{}".format(i))
+            self.set_idobr_rf(rf_type, rf_asis)
+        for i in [1, 2]:
+            sdr_type = assembly.get("sdr_type_{}".format(i))
+            sdr_asis = assembly.get("sdr_asis_{}".format(i))
+            if i == 1:
+                rf_1 = assembly.get("rf_asis_{}".format(1))
+                rf_2 = assembly.get("rf_asis_{}".format(2))
+            else:
+                rf_1 = assembly.get("rf_asis_{}".format(3))
+                rf_2 = assembly.get("rf_asis_{}".format(4))
+            rf_list = [rf_1, rf_2]
+            self.set_sdr(sdr_type=sdr_type, sdr_asis=sdr_asis, rf_list=rf_list)
         try:
-            q = q[0][0]
             self.execute_query("INSERT INTO idobr (type, master_sdr, slave_sdr, asis, sn) "
                                "VALUES ('{}', '{}', '{}', '{}', '{}')".
-                               format(q, assembly.get('master_sdr').get('asis'),
-                                      assembly.get('slave_sdr').get('asis'), idobr.get('asis'), idobr.get('sn')))
+                               format(idobr_type, assembly.get("sdr_asis_1"),
+                                      assembly.get("sdr_asis_2"), idobr_asis, idobr_sn))
             return True
         except Exception as e:
             print(e)
             return False
+
+    def save_test_result(self, res):
+        status = 'PASS' if res.get('status') else 'FAIL'
+        asis = self.get_idobr_by_asis(res.get('system_asis')).get('asis')
+        if asis is not None:
+            self.execute_query("INSERT INTO test_{} (system_asis, date_test, meas_name, meas_func, status) "
+                               "VALUES ('{}', '{}', '{}', '{}', '{}')"
+                               .format(res.get('type_test'), asis,
+                                       res.get('date_test'), res.get('meas_name'), res.get('meas_func'), status))
+        else:
+            raise ValueError('System {} not found in database'.format(res.get('system_asis')))
+
+    def get_test_journal(self, **kwargs):
+        filter_val = kwargs.get('filter_val')
+        for_return = []
+        if filter_val:
+            query = "select * from " \
+                    "(select *, idobr.sn " \
+                    "from test_FufuiDOBR inner join idobr on idobr.asis = system_asis group by date_test) " \
+                    "where system_asis like '%{}%' or sn like '%{}%' or type like '%{}%'"\
+                .format(filter_val, filter_val, filter_val)
+        else:
+            query = "select * from test_FufuiDOBR group by date_test"
+        q = self.select_query(query)
+        for i in q:
+            for_return.append({'asis': i[1],
+                               'date': i[2],
+                               'meas': i[3],
+                               'result': i[5]})
+        return for_return
+
+    def compare_assembly(self, assembly):
+        db_assembly = self.get_idobr_assembly(assembly.get('idobr_asis'))
+        diff_sys = set(list(assembly.values())) - set(list(db_assembly.values()))
+        diff_db = set(list(db_assembly.values())) - set(list(assembly.values()))
+        # print(diff_sys, diff_db)
+        return {"diff": diff_sys == diff_db, "diff_sys": diff_sys, "diff_db": diff_db}
 
 
 

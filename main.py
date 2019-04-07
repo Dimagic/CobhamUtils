@@ -11,10 +11,11 @@ from concurrent import futures
 from PyQt5 import uic, QtGui, QtWidgets, QtCore
 from PyQt5.QtCore import QObject, QSize
 from PyQt5.QtGui import QMovie
-from PyQt5.QtWidgets import QMainWindow, QMessageBox, QInputDialog, QTableWidgetItem, QHeaderView, QWidget
+from PyQt5.QtWidgets import QMainWindow, QMessageBox, QInputDialog, QTableWidgetItem, QHeaderView, QWidget, \
+    QAbstractItemView
 
+from cobhamGui.w_testJournal import WindowTestJournal
 from cobhamGui.w_testselect import WindowTestSelect
-from cobhamTests.fufu_MtdiDoha import FufuiDOBR
 from utils.cfg_parser import Config
 from utils.comPorts import ComPort
 from cobhamGui.w_calibration import WindowCalibration
@@ -22,8 +23,12 @@ from cobhamGui.w_settings import WindowSettings
 from cobhamTests.test_controller import TestController
 from database.cobhamdb import CobhamDB
 
+'''Don`t delete: need for filling test table'''
+from cobhamTests.fufu_iDOBR import FufuiDOBR
 
-VERSION = '0.4.2'
+
+
+VERSION = '0.0.6'
 class EventListener(QtCore.QThread):
     timer_signal = QtCore.pyqtSignal(float)
     def __init__(self, parent):
@@ -74,6 +79,7 @@ class MainApp(QMainWindow, QObject):
 
         self.system_type = ''
         self.system_asis = ''
+        self.system_sn = ''
 
         self.wk_dir = os.path.dirname(os.path.realpath('__file__'))
         self.appIcon = QtGui.QIcon("img/cobham_c_64x64.ico")
@@ -99,11 +105,12 @@ class MainApp(QMainWindow, QObject):
         self.w_main.calibration_btn.clicked.connect(self.calibration)
         self.w_main.new_test_btn.clicked.connect(self.new_test)
         self.w_main.menu_Settings.triggered.connect(self.window_settings)
+        self.w_main.menu_TestJournal.triggered.connect(self.window_test_journal)
         self.w_main.menu_Quit.triggered.connect(self.w_main.close)
         self.w_main.menu_Quit.setShortcut('Ctrl+Q')
 
         self.check_com(False)
-        self.check_calibration()
+        # self.check_calibration()
 
         self.w_main.show()
 
@@ -113,6 +120,9 @@ class MainApp(QMainWindow, QObject):
         self.c_thread.start()
 
     def fill_test_tab(self):
+        self.w_main.tests_tab.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.w_main.tests_tab.setEditTriggers(QAbstractItemView.NoEditTriggers)
+
         self.w_main.tests_tab.setRowCount(0)
         self.w_main.tests_tab.setColumnCount(3)
         self.w_main.tests_tab.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
@@ -189,6 +199,12 @@ class MainApp(QMainWindow, QObject):
             # ToDo: modify check calibration algorithm
             icon = self.passImg
             cal_date = self.db.get_settings_by_name('last_calibr')
+            start = int(self.db.get_settings_by_name('cal_start'))
+            stop = int(self.db.get_settings_by_name('cal_stop'))
+            step = int(self.db.get_settings_by_name('cal_steep'))
+            for i in range(start, stop, step):
+                tmp = self.db.get_offset(i)
+                print(tmp)
             # print(datetime.strptime(cal_date, '%Y-%m-%d'))
             self.w_main.calstat_lbl.setToolTip('Calibration date: {}'.format(cal_date))
             is_calibrated = True
@@ -208,8 +224,6 @@ class MainApp(QMainWindow, QObject):
                 with futures.ThreadPoolExecutor(1) as executor:
                     executor.submit(self.controller_thread.test)
                 # self.controller_thread.curr_test.stop_test()
-
-
 
     def calibration(self):
         WindowCalibration(self)
@@ -240,10 +254,25 @@ class MainApp(QMainWindow, QObject):
         self.controller_thread.set_label_signal.connect(self.set_label_text, QtCore.Qt.QueuedConnection)
         self.controller_thread.check_com_signal.connect(self.check_com, QtCore.Qt.QueuedConnection)
         self.controller_thread.test_result_signal.connect(self.set_test_status, QtCore.Qt.QueuedConnection)
+
+        self.controller_thread.started.connect(self.on_started)
+        self.controller_thread.finished.connect(self.on_finished)
+
         self.controller_thread.start()
+
+    def on_started(self):
+        self.w_main.progressBar.setMaximum(0)
+        self.w_main.progressBar.setValue(0)
+
+    def on_finished(self):
+        self.w_main.progressBar.setMaximum(1)
+        self.w_main.progressBar.setValue(1)
 
     def window_settings(self):
         WindowSettings(self)
+
+    def window_test_journal(self):
+        WindowTestJournal(self)
 
     def send_log(self, *args):
         self.w_main.list_log.addItem(args[0])
@@ -294,13 +323,15 @@ class MainApp(QMainWindow, QObject):
             msg.setStandardButtons(QMessageBox.Ignore | QMessageBox.Retry | QMessageBox.Cancel)
         elif typeQuestion == 4:
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        elif typeQuestion == 5:
+            msg.setStandardButtons(QMessageBox.Retry | QMessageBox.Cancel)
         self.answer = msg.exec_()
         return self.answer
 
     def new_test(self):
-        # ToDo: tmp
-        # val = self.input_msg('Scan SN:')
-        val = 'DOBR0292/NUES'
+        # ToDo: temporary
+        # val = self.input_msg('Scan system barcode:')
+        val = 'DOBR0292/NUER'
         if not val:
             return
         else:
@@ -314,13 +345,42 @@ class MainApp(QMainWindow, QObject):
             val = tests.get(self.system_type.upper())
 
             if val is not None:
+                # ToDo: temporary
+                # sn = self.input_msg('Input system SN:')
+                sn = '112018000025'
+                self.system_sn = sn
+                if sn is None:
+                    return
+                match = re.search('^(0[1-9])|(1[0-2])20((1[8-9])|(2[0-9]))[0-9]{6}$', sn)
+                if not match:
+                    self.send_msg('i', 'CobhamUtils', 'Incorrect SN', 1)
+                    return False
+                else:
+                    res = True
+                    idobr = self.db.get_idobr_by_asis(self.system_asis)
+                    if idobr and idobr.get('sn') not in match.group(0):
+                        res = False
+                        self.send_msg('i', 'CobhamUtils', 'Found iDOBR {}\nwith ASIS: {}\n'
+                                                              'and another SN: {}'
+                                          .format(idobr.get('type'), idobr.get('asis'), idobr.get('sn')), 1)
+                    idobr = self.db.get_idobr_by_sn(sn)
+                    if idobr and idobr.get('asis') != self.system_asis:
+                        res = False
+                        self.send_msg('i', 'CobhamUtils', 'Found iDOBR {}\nwith SN: {}\n'
+                                                          'and another ASIS: {}'
+                                      .format(idobr.get('type'), idobr.get('sn'), idobr.get('asis')), 1)
+                    if not res:
+                        return res
+
+
                 test_list = []
                 for i in val.split(';'):
                     test_list.append(i)
                 self.test_type = WindowTestSelect(parent=self, tests=test_list).test_type
-                print('test: {}'.format(self.test_type))
                 if self.test_type == '':
                     return
+                if not self.check_calibration():
+                    self.w_main.start_test_btn.setEnabled(False)
             else:
                 self.send_msg('i', 'CobhamUtils', 'Tests for system {} is not available'.format(self.system_type), 1)
                 return
@@ -334,22 +394,15 @@ class MainApp(QMainWindow, QObject):
             self.fill_test_tab()
         except:
             self.send_msg('c', 'CobhamUtils', '{} class not found'.format(self.test_type), 1)
+            self.w_main.art_lbl.setText("")
+            self.w_main.rev_lbl.setText("")
+            self.w_main.asis_lbl.setText("")
             return
-
-        idobr = self.db.get_idobr_by_asis('NUES')
-        if idobr:
-            q = self.send_msg('i', 'CobhamUtils', 'Found IDOBR {}\nwith ASIS: {}\n'
-                                                  'and SN: {}\nIs this SN correct?'
-                              .format(idobr.get('type'), idobr.get('asis'), idobr.get('sn')), 4)
-            if q == QMessageBox.Yes:
-                return val
-        return False
 
     def input_msg(self, msg):
         input = QInputDialog()
         input.setWindowIcon(self.appIcon)
         text, okPressed = input.getText(self, 'Input', msg)
-        print(okPressed)
         if okPressed and text != '':
             return text
         return None

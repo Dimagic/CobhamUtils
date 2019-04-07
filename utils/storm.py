@@ -54,9 +54,15 @@ class Storm:
         self.stormpath = self.settings.get('storm_path')
         self.bands = bands
         self.bands_sn = bands_sn
-        self.conn_rem_ip = '192.168.152.1'
-        self.conn_loc_ip = '192.168.152.2'
-        # self.conn_loc_ip = self.get_self_ip()
+        if self.settings.get('storm_dynip') == '1':
+            self.conn_rem_ip = self.parent.w_main.ip_lbl.text()
+            self.conn_loc_ip = self.get_self_ip()
+        elif self.settings.get('storm_statip') == '1':
+            self.conn_rem_ip = self.parent.w_main.ip_lbl.text()
+            self.conn_loc_ip =  self.settings.get('ip')
+        elif self.settings.get('storm_usbip') == '1':
+            self.conn_rem_ip = '192.168.152.1'
+            self.conn_loc_ip = '192.168.152.2'
 
     def get_self_ip(self):
         sys_ip = re.search('^[0-9]{1,3}[.]', self.conn_rem_ip).group(0)
@@ -112,24 +118,20 @@ class Storm:
     def save_file(self, band):
         article = self.parent.w_main.art_lbl.text()
         revision = self.parent.w_main.rev_lbl.text()
-        serial = self.parent.w_main.ser_lbl.text()
+        asis = self.parent.w_main.asis_lbl.text()
         file_name = '{}_{}'.format(band, self.bands_sn.get(band))
-        path = self.parent.wk_dir + '\\!Backup\\' + article + '\\' + 'Rev_{}'.format(revision) + '\\' + serial + '\\'
+        path = self.parent.wk_dir + '\\!Backup\\' + article + '\\' + 'Rev_{}'.format(revision) + '\\' + asis + '\\'
         try:
-            os.stat(path)
-        except:
-            try:
+            if not os.path.exists(self.parent.wk_dir + '\\!Backup\\'):
                 os.mkdir(self.parent.wk_dir + '\\!Backup\\')
-            except:
+            if not os.path.exists(self.parent.wk_dir + '\\!Backup\\' + article + '\\'):
                 os.mkdir(self.parent.wk_dir + '\\!Backup\\' + article + '\\')
-                try:
-                    os.mkdir(path)
-                except:
-                    os.mkdir(self.parent.wk_dir + '\\!Backup\\' + article + '\\' + 'Rev_{}'.format(revision) + '\\')
-                    try:
-                        os.mkdir(path)
-                    except Exception as e:
-                        raise e
+            if not os.path.exists(self.parent.wk_dir + '\\!Backup\\' + article + '\\' + 'Rev_{}'.format(revision) + '\\'):
+                os.mkdir(self.parent.wk_dir + '\\!Backup\\' + article + '\\' + 'Rev_{}'.format(revision) + '\\')
+            if not os.path.exists(path):
+                os.mkdir(path)
+        except Exception as e:
+            raise e
 
 
         while len(application.findwindows.find_windows(title=u'Save As')) == 0:

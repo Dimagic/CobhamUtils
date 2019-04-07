@@ -47,7 +47,7 @@ class Calibration:
             calibr.update({i: val})
         self.db.set_calibration(calibr)
         self.controller.log_signal.emit('Calibration complete')
-        self.controller.get_parent().check_calibration()
+        self.controller.curr_parent.check_calibration()
 
     def loop_calibration(self, type):
         list_val = {}

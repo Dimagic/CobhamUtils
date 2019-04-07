@@ -12,7 +12,7 @@ import serial
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QMessageBox
 
-from cobhamTests.fufu_MtdiDoha import FufuiDOBR
+from cobhamTests.fufu_iDOBR import FufuiDOBR
 from database.cobhamdb import CobhamDB
 from utils.calibration import Calibration
 from utils.comPorts import ComPort
@@ -47,18 +47,20 @@ class TestController(QtCore.QThread):
     Run selected tests or calibration
     """
     def run(self):
+        test_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         try:
             if not Instruments(controller=self).check_instr():
                 return
             if self.type_test == 'FufuiDOBR':
-                if not self.curr_parent.check_calibration():
-                    return
+                # if not self.curr_parent.check_calibration():
+                #     return
                 if not self.system_login():
                     self.send_msg('w', 'CobhamUtils', 'System login fail', 1)
                     return
                 self.get_ip()
 
                 self.curr_test = FufuiDOBR(self)
+                self.db.set_test_type(self.type_test)
                 count = self.curr_parent.w_main.tests_tab.rowCount()
                 tests_queue = self.curr_parent.tests_queue
                 for x in range(0, count):
@@ -69,17 +71,27 @@ class TestController(QtCore.QThread):
                             break
                     is_enable = self.curr_parent.w_main.tests_tab.item(x, 0).checkState()
                     if is_enable == 2:
+                        curr_test = self.curr_parent.w_main.tests_tab.item(x, 1).text()
                         result = self.curr_test.start_current_test(test)
+                        for_save = {'type_test': self.type_test,
+                                    'system_asis': self.curr_parent.w_main.asis_lbl.text(),
+                                    'date_test': test_date,
+                                    'meas_name': curr_test,
+                                    'meas_func': test,
+                                    'status': result}
+                        self.db.save_test_result(for_save)
                         self.test_result_signal.emit(x, result)
 
             if self.type_test == 'calibration':
                 self.curr_test = Calibration(controller=self)
                 self.curr_test.run_calibration()
-        except ValueError as e:
-            self.send_msg('w', 'CobhamUtils', str(e), 1)
-            return
+        # except ValueError as e:
+        #     if str(e) == 'com_port': return
+        #     self.send_msg('w', 'CobhamUtils', str(e), 1)
+        #     return
         except serial.serialutil.SerialException as e:
             self.send_msg('c', 'Error', str(e), 1)
+            print(e)
             return
         except Exception as e:
             traceback_str = ''.join(traceback.format_tb(e.__traceback__))
@@ -128,6 +140,7 @@ class TestController(QtCore.QThread):
 
     def system_login(self):
         res = self.send_com_command('')
+        print("login -> {}".format(res))
         re_string = '({})@[\S]+\[{}\]'.format(self.settings.get('user_name'), self.settings.get('user_name'))
         if res is None:
             return
@@ -145,10 +158,7 @@ class TestController(QtCore.QThread):
             else:
                 raise ValueError('Login fail. Fix the problem and try again.')
 
-
     def send_com_command(self, cmd):
-        # print('-> {}'.format(cmd))
-        res = ''
         cmd_tmp = cmd
         if cmd == self.settings.get('user_name') or \
                 cmd == self.settings.get('user_pass') or \
@@ -156,55 +166,47 @@ class TestController(QtCore.QThread):
             is_login = True
         else:
             is_login = False
-        ser = ComPort.get_connection()
-        if 'Exception' in type(ser).__name__:
-            self.send_msg('w', 'Warning', str(ser), 1)
-            raise ser
-        else:
-            self.check_com_signal.emit(ser.is_open)
-        try:
-            cmd = cmd + '\r'
-            ser.write(cmd.encode('utf-8'))
-            res = ser.read()
-            repeat = 0
-            while 1:
-                time.sleep(.5)
-                data_left = ser.inWaiting()
-                res += ser.read(data_left)
-                # print(len(res), len(cmd), data_left)
-                if data_left == 0:
-                    if len(res) == (len(cmd) + 1) and repeat < 20:
-                        repeat += 1
-                        print(repeat)
-                        continue
-                    else:
-                        break
-            res = str(res, 'utf-8')
-            # print(res)
-            if 'timeout end with no input' in res or 'ERROR' in res:
-                # ser.close()
-                # self.send_com_command(cmd.replace('\r', ''))
-                # raise ValueError(res)
-                ser.close()
-                self.send_com_command(cmd_tmp)
-            if '-sh:' in res:
-                # self.send_msg('w', 'Error', res, 1)
-                raise ValueError(res)
-            if res is None:
-                q = self.send_msg('q', 'Cobham utils', 'Command "{}" received None.'.format(cmd))
+
+        with ComPort.get_connection() as ser:
+            try:
+                cmd = cmd + '\r'
+                ser.write(cmd.encode('utf-8'))
+                res = ser.read()
+                self.check_com_signal.emit(ser.is_open)
+                repeat = 0
+                while 1:
+                    time.sleep(.5)
+                    data_left = ser.inWaiting()
+                    res += ser.read(data_left)
+                    if data_left == 0:
+                        if len(res) == (len(cmd) + 1) and repeat < 20:
+                            repeat += 1
+                            continue
+                        else:
+                            break
+                res = str(res, 'utf-8')
+                # print(res)
+                # if 'timeout end with no input' in res or 'ERROR' in res:
+                #     ser.close()
+                #     self.send_com_command(cmd_tmp)
+                if '-sh:' in res:
+                    # self.send_msg('w', 'Error', res, 1)
+                    raise ValueError(res)
+                if res is None:
+                    q = self.send_msg('q', 'Cobham utils', 'Command "{}" received None.'.format(cmd))
+                    if q == QMessageBox.Retry:
+                        self.send_com_command(cmd)
+                    if q == QMessageBox.Cancel:
+                        pass
+                if not is_login:
+                    res = str(res).replace(cmd, '').replace('root@AxellShell[root]>', '')
+                return res
+            except Exception as e:
+                q = self.send_msg('q', 'Cobham utils', str(e), 5)
                 if q == QMessageBox.Retry:
                     self.send_com_command(cmd)
-                if q ==  QMessageBox.Cancel:
-                    pass
-            if not is_login:
-                res = str(res).replace(cmd, '').replace('root@AxellShell[root]>', '')
-            # print('<- {}'.format(res))
-        except Exception as e:
-            raise e
-        finally:
-            ser.close()
-            self.check_com_signal.emit(ser.is_open)
-            return res
+                if q == QMessageBox.Cancel:
+                    raise e
 
     def get_ip(self):
         cmd = 'axsh get nic eth0'
@@ -277,17 +279,6 @@ class TestController(QtCore.QThread):
         if status == 'completed':
             status = status + '\n'
         self.log_signal.emit('*** {} *** {}'.format(name, status))
-
-    def get_sdr_info(self):
-        info = {}
-        for i in ['master_sdr', 'slave_sdr']:
-            if i == 'master_sdr':
-                pref = ''
-            else:
-                pref = 'send_msg -d 172.24.30.2 -c '
-            val = self.send_com_command(pref + 'axsh get sis').split(' ')
-            info.update({i: {'type': val[2], 'asis': val[3]}})
-        return info
 
     @staticmethod
     def true_to_pass(val):
