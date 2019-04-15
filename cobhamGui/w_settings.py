@@ -41,15 +41,8 @@ class WindowSettings(QDialog):
         self.w_settings.exec_()
 
     def is_pressed_ok(self):
-        # if not self.verify_settings():
-        #     msg = QMessageBox()
-        #     msg.setIcon(QMessageBox.Warning)
-        #     msg.setWindowTitle('Save settings')
-        #     msg.setText('Not all data are correct')
-        #     msg.setWindowIcon(self.appIcon)
-        #     self.answer = msg.exec_()
-        #     return
         self.save_settings()
+        self.w_settings.close()
 
     def is_pressed_cancel(self):
         self.w_settings.close()
