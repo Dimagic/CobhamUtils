@@ -57,6 +57,7 @@ class TestController(QtCore.QThread):
                 if not self.system_login():
                     self.send_msg('w', 'CobhamUtils', 'System login fail', 1)
                     return
+                self.send_com_command('axsh SET NIC eth0 DYNAMIC')
                 self.get_ip()
 
                 self.curr_test = FufuiDOBR(self)
