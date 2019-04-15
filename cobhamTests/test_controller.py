@@ -12,7 +12,7 @@ import serial
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QMessageBox
 
-from cobhamTests.fufu_iDOBR import FufuiDOBR
+from cobhamTests.fufu_IDOBR import FufuiDOBR
 from database.cobhamdb import CobhamDB
 from utils.calibration import Calibration
 from utils.comPorts import ComPort

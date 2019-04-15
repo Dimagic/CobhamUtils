@@ -24,11 +24,11 @@ from cobhamTests.test_controller import TestController
 from database.cobhamdb import CobhamDB
 
 '''Don`t delete: need for filling test table'''
-from cobhamTests.fufu_iDOBR import FufuiDOBR
+from cobhamTests.fufu_IDOBR import FufuiDOBR
 
 
 
-VERSION = '0.0.6'
+VERSION = '0.0.7'
 class EventListener(QtCore.QThread):
     timer_signal = QtCore.pyqtSignal(float)
     def __init__(self, parent):
@@ -110,7 +110,7 @@ class MainApp(QMainWindow, QObject):
         self.w_main.menu_Quit.setShortcut('Ctrl+Q')
 
         self.check_com(False)
-        # self.check_calibration()
+        self.set_progress_bar(1, 0)
 
         self.w_main.show()
 
@@ -261,12 +261,14 @@ class MainApp(QMainWindow, QObject):
         self.controller_thread.start()
 
     def on_started(self):
-        self.w_main.progressBar.setMaximum(0)
-        self.w_main.progressBar.setValue(0)
+        self.set_progress_bar(0, 0)
 
     def on_finished(self):
-        self.w_main.progressBar.setMaximum(1)
-        self.w_main.progressBar.setValue(1)
+        self.set_progress_bar(1, 1)
+
+    def set_progress_bar(self, pmax, pval):
+        self.w_main.progressBar.setMaximum(pmax)
+        self.w_main.progressBar.setValue(pval)
 
     def window_settings(self):
         WindowSettings(self)

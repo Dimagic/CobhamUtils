@@ -3,7 +3,7 @@ from PyQt5.QtCore import pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import QDialog, QHeaderView, QTableWidgetItem, QAbstractItemView, QMessageBox, QTreeWidgetItem
 
 from cobhamGui.w_assembly import WindowAssembly
-from cobhamTests.fufu_iDOBR import FufuiDOBR
+from cobhamTests.fufu_IDOBR import FufuiDOBR
 from database.cobhamdb import CobhamDB
 
 
