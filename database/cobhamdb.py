@@ -360,22 +360,43 @@ class CobhamDB:
 
     def get_test_journal(self, **kwargs):
         filter_val = kwargs.get('filter_val')
+        date_start = kwargs.get('date_start')
+        date_stop = kwargs.get('date_stop')
         for_return = []
         if filter_val:
             query = "select * from " \
                     "(select *, idobr.sn " \
                     "from test_FufuiDOBR inner join idobr on idobr.asis = system_asis group by date_test) " \
-                    "where system_asis like '%{}%' or sn like '%{}%' or type like '%{}%'"\
-                .format(filter_val, filter_val, filter_val)
+                    "where system_asis like '%{}%' or sn like '%{}%' or type like '%{}%' " \
+                    "and date_test between '{}' and '{}'"\
+                .format(filter_val, filter_val, filter_val, date_start, date_stop)
         else:
-            query = "select * from test_FufuiDOBR group by date_test"
+            query = "select * from test_FufuiDOBR where date_test between '{}' and '{}' group by date_test".\
+                format(date_start, date_stop)
+        q = self.select_query(query)
+        for i in q:
+            q_status = self.select_query("select status from test_FufuiDOBR where "
+                                         "system_asis = '{}' and date_test = '{}'".format(i[1], i[2]))
+            for_return.append({'asis': i[1],
+                               'date': i[2],
+                               'meas': i[3],
+                               'result': 'FAIL' if 'FAIL' in [x[0] for x in q_status] else 'PASS'})
+        return for_return
+
+    def get_current_system_tests(self, **kwargs):
+        for_return = []
+        date = kwargs.get('date')
+        asis = kwargs.get('asis')
+        query = "SELECT * from test_FufuiDOBR where date_test = '{}' and system_asis = '{}'".format(date, asis)
         q = self.select_query(query)
         for i in q:
             for_return.append({'asis': i[1],
                                'date': i[2],
                                'meas': i[3],
+                               'meas_name': i[4],
                                'result': i[5]})
         return for_return
+
 
     def compare_assembly(self, assembly):
         db_assembly = self.get_idobr_assembly(assembly.get('idobr_asis'))
