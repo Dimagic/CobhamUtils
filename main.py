@@ -11,24 +11,24 @@ from concurrent import futures
 from PyQt5 import uic, QtGui, QtWidgets, QtCore
 from PyQt5.QtCore import QObject, QSize
 from PyQt5.QtGui import QMovie
-from PyQt5.QtWidgets import QMainWindow, QMessageBox, QInputDialog, QTableWidgetItem, QHeaderView, QWidget, \
-    QAbstractItemView
+from PyQt5.QtWidgets import QMainWindow, QMessageBox, QInputDialog, QTableWidgetItem, QHeaderView, QAbstractItemView
 
 from cobhamGui.w_testJournal import WindowTestJournal
 from cobhamGui.w_testselect import WindowTestSelect
-from utils.cfg_parser import Config
-from utils.comPorts import ComPort
 from cobhamGui.w_calibration import WindowCalibration
 from cobhamGui.w_settings import WindowSettings
+from utils.cfg_parser import Config
+from utils.comPorts import ComPort
 from cobhamTests.test_controller import TestController
 from database.cobhamdb import CobhamDB
 
 '''Don`t delete: need for filling test table'''
 from cobhamTests.fufu_IDOBR import FufuiDOBR
+from cobhamTests.fufu_MtdiDoha import FufuMtdi
 
 
 
-VERSION = '0.0.7'
+VERSION = '0.0.8'
 class EventListener(QtCore.QThread):
     timer_signal = QtCore.pyqtSignal(float)
     def __init__(self, parent):
@@ -272,6 +272,7 @@ class MainApp(QMainWindow, QObject):
 
     def window_settings(self):
         WindowSettings(self)
+
 
     def window_test_journal(self):
         WindowTestJournal(self)

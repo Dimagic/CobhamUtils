@@ -13,6 +13,7 @@ from PyQt5 import QtCore
 from PyQt5.QtWidgets import QMessageBox
 
 from cobhamTests.fufu_IDOBR import FufuiDOBR
+from cobhamTests.fufu_MtdiDoha import FufuMtdi
 from database.cobhamdb import CobhamDB
 from utils.calibration import Calibration
 from utils.comPorts import ComPort
@@ -82,6 +83,8 @@ class TestController(QtCore.QThread):
                                     'status': result}
                         self.db.save_test_result(for_save)
                         self.test_result_signal.emit(x, result)
+            if self.type_test == 'FufuMtdi':
+                self.curr_test = FufuMtdi(controller=self)
 
             if self.type_test == 'calibration':
                 self.curr_test = Calibration(controller=self)

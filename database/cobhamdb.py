@@ -1,3 +1,7 @@
+import decimal
+import json
+
+import datetime
 import numpy
 import time
 from sqlalchemy import MetaData, Table, Column, Integer, String, ForeignKey, create_engine, Text, Float
@@ -115,12 +119,22 @@ class CobhamDB:
             except Exception as e:
                 raise e
 
+    def alchemyencoder(obj):
+        """JSON encoder function for SQLAlchemy special classes."""
+        if isinstance(obj, datetime.date):
+            return obj.isoformat()
+        elif isinstance(obj, decimal.Decimal):
+            return float(obj)
+
     def select_query(self, query=''):
         if query == '': return
         with self.db_engine.connect() as connection:
             try:
                 s = []
-                for val in connection.execute(query):
+                values = connection.execute(query)
+                # j = json.dumps([dict(r) for r in values], default=self.alchemyencoder)
+                # print(j)
+                for val in values:
                     s.append(val)
                 return s
             except Exception as e:
@@ -390,9 +404,7 @@ class CobhamDB:
         query = "SELECT * from test_FufuiDOBR where date_test = '{}' and system_asis = '{}'".format(date, asis)
         q = self.select_query(query)
         for i in q:
-            for_return.append({'asis': i[1],
-                               'date': i[2],
-                               'meas': i[3],
+            for_return.append({'meas': i[3],
                                'meas_name': i[4],
                                'result': i[5]})
         return for_return

@@ -1,3 +1,4 @@
+import xlrd
 from PyQt5 import uic, QtCore, QtGui
 from PyQt5.QtCore import pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import QDialog, QHeaderView, QTableWidgetItem, QAbstractItemView, QMessageBox, QTreeWidgetItem
@@ -5,6 +6,7 @@ from PyQt5.QtWidgets import QDialog, QHeaderView, QTableWidgetItem, QAbstractIte
 from cobhamGui.w_assembly import WindowAssembly
 from cobhamTests.fufu_IDOBR import FufuiDOBR
 from database.cobhamdb import CobhamDB
+from utils.print_report import Report
 
 
 class WindowTestJournal(QDialog):
@@ -12,6 +14,7 @@ class WindowTestJournal(QDialog):
         super(WindowTestJournal, self).__init__(parent)
         self.db = CobhamDB()
         self.parent = parent
+        self.assembly = {}
         self.appIcon = parent.appIcon
         self.w_journal = uic.loadUi('forms/journal.ui')
         self.w_journal.setWindowTitle('Test journal')
@@ -20,6 +23,8 @@ class WindowTestJournal(QDialog):
                                        QtCore.Qt.WindowMinMaxButtonsHint |
                                        QtCore.Qt.WindowCloseButtonHint)
         self.w_journal.filter.textChanged.connect(self.filter)
+        self.w_journal.print_btn.clicked.connect(self.print_report)
+
         self.header_journal = ["System type", "System ASIS", "System SN", "Test type", "Test date", "Result"]
         self.header_tests = ["Test name", "Result"]
         self.w_journal.journal_tab.cellDoubleClicked.connect(self.cellDoubleClick)
@@ -35,8 +40,35 @@ class WindowTestJournal(QDialog):
 
         self.fill_tab_header()
         self.fill_tab_row()
+        self.fill_temp_combo()
 
         self.w_journal.exec_()
+
+    def print_report(self):
+        selected = self.w_journal.journal_tab.selectedIndexes()
+        if len(selected) == 0:
+            self.parent.send_msg('i', 'Print report', 'You have to choice report for print', 1)
+            return
+        else:
+            row = selected[0].row()
+            asis = self.w_journal.journal_tab.item(row, 1).text()
+            test_type = self.w_journal.journal_tab.item(row, 3).text()
+            date = self.w_journal.journal_tab.item(row, 4).text()
+
+
+
+        try:
+            report_data = self.db.get_current_system_tests(asis=asis, date=date)
+            assembly = self.db.get_idobr_assembly(asis)
+            report = Report(date=date, data=report_data, assembly=assembly, test_type=test_type)
+            report.generate_report()
+        except Exception as e:
+            self.parent.send_msg('w', 'Generate report error', str(e), 1)
+
+    def fill_temp_combo(self):
+        workbook = xlrd.open_workbook('templates/template.xls', formatting_info=True, on_demand=True)
+        for k in workbook.sheet_names():
+            self.w_journal.templ_combo.addItem(k)
 
     def fill_tab_header(self):
         """
