@@ -40,9 +40,9 @@ class Report:
         data = [["Master SDR", self.assembly.get("sdr_type_1"), "Slave SDR", self.assembly.get("sdr_type_2")],
                 ["Master ASIS", self.assembly.get("sdr_asis_1"), "Slave ASIS", self.assembly.get("sdr_asis_2")],
                 [self.assembly.get("rf_type_1"),
-                 self.assembly.get("rf_asis_1"), self.assembly.get("rf_type_3"), self.assembly.get("rf_asis_3")],
-                [self.assembly.get("rf_type_2"),
-                 self.assembly.get("rf_asis_2"), self.assembly.get("rf_type_4"), self.assembly.get("rf_asis_4")]]
+                 self.assembly.get("rf_asis_1"), self.assembly.get("rf_type_4"), self.assembly.get("rf_asis_4")],
+                [self.assembly.get("rf_type_3"),
+                 self.assembly.get("rf_asis_3"), self.assembly.get("rf_type_2"), self.assembly.get("rf_asis_2")]]
         t = Table(data, colWidths=100)
         t.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                                ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.black),

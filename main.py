@@ -28,7 +28,7 @@ from cobhamTests.fufu_MtdiDoha import FufuMtdi
 
 
 
-VERSION = '0.0.8'
+VERSION = '0.0.9'
 class EventListener(QtCore.QThread):
     timer_signal = QtCore.pyqtSignal(float)
     def __init__(self, parent):
@@ -195,9 +195,10 @@ class MainApp(QMainWindow, QObject):
             self.redLedMovie.start()
 
     def check_calibration(self):
+        icon = self.passImg
+        is_calibrated = False
         try:
             # ToDo: modify check calibration algorithm
-            icon = self.passImg
             cal_date = self.db.get_settings_by_name('last_calibr')
             start = int(self.db.get_settings_by_name('cal_start'))
             stop = int(self.db.get_settings_by_name('cal_stop'))
@@ -210,7 +211,6 @@ class MainApp(QMainWindow, QObject):
             is_calibrated = True
         except:
             icon = self.failImg
-            is_calibrated = False
         finally:
             self.w_main.start_test_btn.setEnabled(is_calibrated)
             self.w_main.calstat_lbl.setPixmap(icon)
@@ -254,6 +254,7 @@ class MainApp(QMainWindow, QObject):
         self.controller_thread.set_label_signal.connect(self.set_label_text, QtCore.Qt.QueuedConnection)
         self.controller_thread.check_com_signal.connect(self.check_com, QtCore.Qt.QueuedConnection)
         self.controller_thread.test_result_signal.connect(self.set_test_status, QtCore.Qt.QueuedConnection)
+        self.controller_thread.progress_bar_signal.connect(self.set_progress_bar, QtCore.Qt.QueuedConnection)
 
         self.controller_thread.started.connect(self.on_started)
         self.controller_thread.finished.connect(self.on_finished)
@@ -267,6 +268,7 @@ class MainApp(QMainWindow, QObject):
         self.set_progress_bar(1, 1)
 
     def set_progress_bar(self, pmax, pval):
+        print(pmax, pval)
         self.w_main.progressBar.setMaximum(pmax)
         self.w_main.progressBar.setValue(pval)
 
@@ -350,7 +352,7 @@ class MainApp(QMainWindow, QObject):
             if val is not None:
                 # ToDo: temporary
                 # sn = self.input_msg('Input system SN:')
-                sn = '112018000025'
+                sn = '112018000030'
                 self.system_sn = sn
                 if sn is None:
                     return

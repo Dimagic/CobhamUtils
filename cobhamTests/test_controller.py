@@ -32,6 +32,7 @@ class TestController(QtCore.QThread):
     set_label_signal = QtCore.pyqtSignal(str, str)
     check_com_signal = QtCore.pyqtSignal(bool)
     test_result_signal = QtCore.pyqtSignal(int, bool)
+    progress_bar_signal = QtCore.pyqtSignal(int, int)
 
     def __init__(self, parent=None, **kwargs):
         QtCore.QThread.__init__(self, parent)
@@ -74,15 +75,30 @@ class TestController(QtCore.QThread):
                     is_enable = self.curr_parent.w_main.tests_tab.item(x, 0).checkState()
                     if is_enable == 2:
                         curr_test = self.curr_parent.w_main.tests_tab.item(x, 1).text()
-                        result = self.curr_test.start_current_test(test)
-                        for_save = {'type_test': self.type_test,
-                                    'system_asis': self.curr_parent.w_main.asis_lbl.text(),
-                                    'date_test': test_date,
-                                    'meas_name': curr_test,
-                                    'meas_func': test,
-                                    'status': result}
+                        while True:
+                            result = self.curr_test.start_current_test(test)
+                            for_save = {'type_test': self.type_test,
+                                        'system_asis': self.curr_parent.w_main.asis_lbl.text(),
+                                        'date_test': test_date,
+                                        'meas_name': curr_test,
+                                        'meas_func': test,
+                                        'status': result}
+                            if not result:
+                                q = self.send_msg('w', 'Error', 'Test {} fail'.format(test), 3)
+                                if q == QMessageBox.Ignore:
+                                    break
+                                if q == QMessageBox.Retry:
+                                    self.progress_bar_signal.emit(0, 0)
+                                    continue
+                                if q == QMessageBox.Cancel:
+                                    self.db.save_test_result(for_save)
+                                    self.test_result_signal.emit(x, result)
+                                    return
+                            else:
+                                break
                         self.db.save_test_result(for_save)
                         self.test_result_signal.emit(x, result)
+
             if self.type_test == 'FufuMtdi':
                 self.curr_test = FufuMtdi(controller=self)
 

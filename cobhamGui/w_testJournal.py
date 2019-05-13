@@ -33,7 +33,7 @@ class WindowTestJournal(QDialog):
 
         self.w_journal.assembly_tree.setHeaderHidden(True)
         curr_date = QtCore.QDate.currentDate()
-        self.w_journal.start_date.setDate(curr_date.addDays(-curr_date.day() + 1).addMonths(-1))
+        self.w_journal.start_date.setDate(curr_date.addDays(-curr_date.day() + 1))
         self.w_journal.stop_date.setDate(curr_date.addDays(curr_date.daysInMonth() - curr_date.day()))
         self.w_journal.start_date.dateChanged.connect(self.fill_tab_row)
         self.w_journal.stop_date.dateChanged.connect(self.fill_tab_row)

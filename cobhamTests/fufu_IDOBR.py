@@ -43,13 +43,6 @@ class FufuiDOBR(QtCore.QThread):
     def start_current_test(self, test):
         test_result = getattr(self, test)()
         self.controller.send_test_name(self.current_test_name, 'Completed\n')
-        if not test_result:
-            # ToDo: test not wait answer???
-            q = self.controller.send_msg('w', 'Error', 'Test {} fail'.format(test), 3)
-            if q == QMessageBox.Cancel:
-                return
-            if q == QMessageBox.Retry:
-                self.start_current_test(test)
         return test_result
 
     def run_test_check_bands_10(self):
@@ -266,7 +259,7 @@ class FufuiDOBR(QtCore.QThread):
         self.controller.send_com_command('axsh SET EXT 0 0 0 0')
         keys = ['7', '6', '5', '4']
         res_list = []
-        for pin in keys:
+        for n, pin in enumerate(keys):
             counter = 3
             while True:
                 alarms = self.get_ext_alarm()
@@ -282,10 +275,12 @@ class FufuiDOBR(QtCore.QThread):
                         res_list.append(False)
                         self.controller.log_signal.emit('EXT{} alarm: FAIL'.format(pin))
                         break
+            self.controller.progress_bar_signal.emit(len(keys), n+1)
         status = self.controller.true_to_pass(all(res_list))
         self.controller.log_signal.emit('External alarms: {}'.format(status))
         # self.db.set_test_result(self.__class__.__name__, inspect.currentframe().f_code.co_name, self.asis,
         #                         self.test_time, self.controller.true_to_pass(status))
+
         return all(res_list)
 
     def run_test_gpr_gps_110(self):
@@ -324,7 +319,7 @@ class FufuiDOBR(QtCore.QThread):
 
                 tmp = self.controller.send_com_command('read_gps_coordinates.sh')
                 gps_arr = self.controller.str_to_dict(tmp)['coordinates'][0]
-                if gps_arr['x'] + gps_arr['y'] > 0 and not gps_status:
+                if gps_arr['x'] != 0.0 and gps_arr['y']!= 0.0 and not gps_status:
                     gps_status = True
                     if not is_gps_printed:
                         self.controller.log_signal.emit('GPS test: {}'.format(gps_status))
@@ -335,14 +330,13 @@ class FufuiDOBR(QtCore.QThread):
                 if gps_status and modem_status:
                     break
             if delta_time // 60 >= time_wait:
-                modem_status = 'FAIL'
                 break
-            # delta = float(test_start + time_wait * 60 - cur_time)
-            # self.controller.timer_signal.emit(delta)
             time.sleep(.5)
-        self.controller.log_signal.emit('Disable Remote and Modem Communication: {}'.format(self.set_remote_communication(0)))
-        self.controller.send_msg('i', 'GPR & GPS', 'Disconnect GPS and GPR antenna, and replace sim card', 1)
-        return any([gps_status, modem_status])
+        result = all([gps_status, modem_status])
+        if result:
+            self.controller.log_signal.emit('Disable Remote and Modem Communication: {}'.format(self.set_remote_communication(0)))
+            self.controller.send_msg('i', 'GPR & GPS', 'Disconnect GPS and GPR antenna, and replace sim card', 1)
+        return result
 
     def run_test_set_static_ip_120(self):
         self.set_test_name('Set static IP')
@@ -543,6 +537,7 @@ class FufuiDOBR(QtCore.QThread):
             if res_filter != 'SUCCESS':
                 self.controller.log_signal.emit(res['DOBR FILTER'][0]['Info'])
                 test_status = False
+            self.controller.progress_bar_signal.emit(len(self.bands), n + 1)
         return test_status
 
     def set_imop_status(self, band, status):
