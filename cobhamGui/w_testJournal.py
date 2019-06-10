@@ -117,7 +117,7 @@ class WindowTestJournal(QDialog):
         total_tests = len(rows)
 
         for row in rows:
-            total_system.update({row.get('system_asis'): None})
+            total_system.update({row.get('asis'): None})
             res = row.get('result')
             if res == 'PASS':
                 pass_count += 1
