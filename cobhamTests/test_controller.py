@@ -22,7 +22,27 @@ from utils.instruments import Instruments
 
 class TestController(QtCore.QThread):
     LOG_FILENAME = './Log/cobham_utils.log'
-    logging.basicConfig(filename=LOG_FILENAME, level=logging.ERROR)
+    # # logging.basicConfig(filename=LOG_FILENAME, level=logging.ERROR)
+    # logger = logging.FileHandler(LOG_FILENAME)
+    # logger.setLevel(logging.DEBUG)
+    # # logger = logging.getLogger('cobham_utils')
+
+    # create logger with 'spam_application'
+    logger = logging.getLogger('cobham_utils')
+    logger.setLevel(logging.DEBUG)
+    # create file handler which logs even debug messages
+    fh = logging.FileHandler(LOG_FILENAME)
+    fh.setLevel(logging.DEBUG)
+    # create console handler with a higher log level
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.ERROR)
+    # create formatter and add it to the handlers
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    fh.setFormatter(formatter)
+    ch.setFormatter(formatter)
+    # add the handlers to the logger
+    logger.addHandler(fh)
+    logger.addHandler(ch)
 
     log_signal = QtCore.pyqtSignal(str)
     log_signal_arg = QtCore.pyqtSignal(str, int)
@@ -83,11 +103,12 @@ class TestController(QtCore.QThread):
                                         'meas_name': curr_test,
                                         'meas_func': test,
                                         'status': result}
-                            if not result:
+                            if not result or type(result) == Exception:
                                 q = self.send_msg('w', 'Error', 'Test {} fail'.format(test), 3)
                                 if q == QMessageBox.Ignore:
                                     break
                                 if q == QMessageBox.Retry:
+                                    result = None
                                     self.progress_bar_signal.emit(0, 0)
                                     continue
                                 if q == QMessageBox.Cancel:
@@ -109,14 +130,17 @@ class TestController(QtCore.QThread):
         #     if str(e) == 'com_port': return
         #     self.send_msg('w', 'CobhamUtils', str(e), 1)
         #     return
+
         except serial.serialutil.SerialException as e:
             self.send_msg('c', 'Error', str(e), 1)
-            print(e)
+            self.logger.info(str(e))
             return
         except Exception as e:
             traceback_str = ''.join(traceback.format_tb(e.__traceback__))
             self.log_signal_arg.emit(traceback_str, -1)
             self.send_msg('c', 'Error', str(e), 1)
+            self.logger.error(str(e))
+            self.logger.info(traceback_str)
             return
 
     def system_up_check(self):
