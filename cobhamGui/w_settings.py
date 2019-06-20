@@ -38,7 +38,8 @@ class WindowSettings(QDialog):
         self.fill_com_ports()
         self.fill_instruments()
         self.load_settings()
-        self.w_settings.exec_()
+        # self.w_settings.exec_()
+        self.w_settings.show()
 
     def is_pressed_ok(self):
         self.save_settings()

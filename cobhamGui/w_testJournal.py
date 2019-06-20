@@ -55,8 +55,6 @@ class WindowTestJournal(QDialog):
             test_type = self.w_journal.journal_tab.item(row, 3).text()
             date = self.w_journal.journal_tab.item(row, 4).text()
 
-
-
         try:
             report_data = self.db.get_current_system_tests(asis=asis, date=date)
             assembly = self.db.get_idobr_assembly(asis)
