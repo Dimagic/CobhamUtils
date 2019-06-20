@@ -73,12 +73,12 @@ class FftCalibrate:
             self.instr.gen.write(":OUTP:STAT ON")
             self.controller.send_com_command('axsh SET fft {} -195'.format(self.band_fft[band_number][uldl]))
             time.sleep(1)
-            tmp_gain = self.controller.send_com_command('fft.lua {}'.format(self.band_fft[band_number][uldl])).strip()
-            res = ast.literal_eval(tmp_gain)
+            tmp_gain = self.controller.send_com_command('fft.lua json {} 0 1'.format(self.band_fft[band_number][uldl])).strip()
+            res = self.controller.str_to_dict(tmp_gain)
             curr_fft = (int(max(res['data'])) + 60) * (-1)
             self.controller.send_com_command('axsh SET fft {} {}'.format(self.band_fft[band_number][uldl], curr_fft))
             # ToDo: every time res.get('band') is 800 ???????
-            res = ast.literal_eval(tmp_gain)
+            print(res.get('band'))
             fft = self.controller.send_com_command('axsh GET fft {}'.format(self.band_fft[band_number][uldl])).strip()
             gain = int(fft) + int(max(res['data']))
 
