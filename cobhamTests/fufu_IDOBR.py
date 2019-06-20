@@ -1,11 +1,10 @@
 import glob
 import re
 import time
-
-from _datetime import datetime
+import datetime
+import os
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QMessageBox
-
 from cobhamTests.fft_calibration import FftCalibrate
 from database.cobhamdb import CobhamDB
 from utils.instruments import Instruments
@@ -21,7 +20,7 @@ class FufuiDOBR(QtCore.QThread):
         self.db = CobhamDB()
         self.db.set_test_type(self.__class__.__name__)
         self.asis = self.parent.w_main.asis_lbl.text()
-        self.test_time = datetime.now().strftime("%Y/%m/%d/, %H:%M:%S")
+        self.test_time = datetime.datetime.now().strftime("%Y/%m/%d/, %H:%M:%S")
         self.bands = None
         self.bands_sn = None
         self.sn_list_master = {}
@@ -46,12 +45,7 @@ class FufuiDOBR(QtCore.QThread):
         return test_result
 
     def run_test_check_bands_10(self):
-        assembly = {}
         self.set_test_name('Check bands')
-        # ToDo: temporary values
-        # self.bands = ['ABCD18', 'ABCD08', 'ABCD09', 'ABCD21']
-        # self.bands_sn = {'ABCD18': 'NRHC', 'ABCD08': 'NPF6', 'ABCD09': 'NRHU', 'ABCD21': 'NK8N'}
-
         self.bands = self.get_bands()
         self.bands_sn = self.get_bands_sn()
 
@@ -90,19 +84,28 @@ class FufuiDOBR(QtCore.QThread):
 
     def run_test_save_set_file_30(self):
         self.set_test_name('Save set file')
-        # q = self.controller.send_msg('q', 'Cobham utils', 'Do you want to save set files?', 2)
-        # if q != QMessageBox.Ok:
-        #     return True
+        path = self.parent.wk_dir + '\\!Backup\\{}\\Rev_{}\\{}\\*.csv'.format(self.parent.w_main.art_lbl.text(),
+                                                                              self.parent.w_main.rev_lbl.text(),
+                                                                              self.parent.w_main.asis_lbl.text())
+
         self.check_bands()
         self.check_bands_sn()
+        is_files_exist = True
+        for band in self.bands:
+            if not os.path.exists(path.replace("*", "{}_{}".format(band, self.bands_sn.get(band)))):
+                is_files_exist = False
+        if is_files_exist:
+            q = self.controller.send_msg('q', 'Cobham utils', 'All set files already exist.\n'
+                                                              'Continue save set files?', 2)
+            if q == QMessageBox.Cancel:
+                return True
+
         self.controller.send_com_command('udp_bridge1 restart')
         self.controller.log_signal.emit("Starting udp_bridge")
         storm = Storm(controller=self.controller, bands=self.bands, bands_sn=self.bands_sn)
         for place, band in enumerate(self.bands):
             storm.save_setfile(place=place, band=band)
-        path = self.parent.wk_dir + '\\!Backup\\{}\\Rev_{}\\{}\\*.csv'.format(self.parent.w_main.art_lbl.text(),
-                                                                              self.parent.w_main.rev_lbl.text(),
-                                                                              self.parent.w_main.asis_lbl.text())
+
         paths = ''
         for i in glob.glob(path):
             paths += i
@@ -185,16 +188,6 @@ class FufuiDOBR(QtCore.QThread):
                 instr.gen.write(":OUTP:STAT OFF")
             self.controller.log_signal.emit('DL composite power: {}'.format(self.controller.true_to_pass(test_status)))
             return test_status
-            # self.parent.result_table.append(['Reading DL COMPOSITE Power', test_status])
-            # if not test_status:
-            #     while True:
-            #         q = input("Input R -> Retry; C -> Continue; X -> Break :")
-            #         if q.upper() == 'R':
-            #             self.test_composite_power()
-            #         elif q.upper() == 'C':
-            #             break
-            #         elif q.upper() == 'X':
-            #             self.parent.menu()
         except Exception as e:
             raise e
 
@@ -203,8 +196,6 @@ class FufuiDOBR(QtCore.QThread):
         self.check_bands()
         fft = FftCalibrate(self.controller, self.bands)
         return fft.run_calibrate()
-
-
 
     def run_test_sw_verification_80(self):
         self.set_test_name('SW version verification')
@@ -284,9 +275,15 @@ class FufuiDOBR(QtCore.QThread):
         return all(res_list)
 
     def run_test_gpr_gps_110(self):
+        gps_status = False
+        modem_status = False
+        is_modem_printed = False
+        is_gps_printed = False
+        ip = ''
+
         self.set_test_name('GPS & GPRS')
         self.controller.send_msg('i', 'GPR & GPS', 'Connect GPS and GPR antenna, and insert sim card', 1)
-        test_start = time.time()
+        test_start = datetime.datetime.now().timestamp()
         self.controller.log_signal.emit('Enable Remote and Modem Communication: {}'.format(self.set_remote_communication(1)))
 
         gde = int(self.controller.send_com_command('axsh GET CDE').split(' ')[0])
@@ -299,11 +296,29 @@ class FufuiDOBR(QtCore.QThread):
         else:
             self.controller.log_signal.emit('gpr_gps_test: initialisation PASS')
 
-        gps_status = False
-        modem_status = False
-        is_modem_printed = False
-        is_gps_printed = False
-        ip = ''
+        self.controller.log_signal.emit('Checking USB devices...')
+        printed_device = []
+        while True:
+            tmp = self.controller.send_com_command('lsusb').replace('\r', '').split('\n')
+            delta = datetime.datetime.now().timestamp() - test_start
+            tmp = list(filter(lambda x: x != '', tmp))
+
+            if len(tmp) > 2:
+                for i in tmp:
+                    self.controller.log_signal_arg.emit(i, -1)
+                return False
+            if len(tmp) > 0:
+                for i in tmp:
+                    if i not in printed_device:
+                        self.controller.log_signal.emit('Found USB device: {}'.format(i))
+                        printed_device.append(i)
+            if len(tmp) == 2:
+                break
+            if delta > 180 and len(tmp) < 2:
+                self.controller.log_signal.emit('Checking USB devices: found only {} USB device'.format(len(tmp)))
+                return False
+            time.sleep(3)
+
         while True:
             time_wait = int(self.db.get_all_data('settings').get('modem_timeout'))
             cur_time = time.time()
@@ -325,8 +340,6 @@ class FufuiDOBR(QtCore.QThread):
                         self.controller.log_signal.emit('GPS test: {}'.format(gps_status))
                         self.controller.log_signal.emit('Coordinates: {} : {}'.format(gps_arr['x'], gps_arr['y']))
                         is_gps_printed = True
-
-                print(delta_time, ip, gps_arr)
                 if gps_status and modem_status:
                     break
             if delta_time // 60 >= time_wait:
@@ -358,7 +371,6 @@ class FufuiDOBR(QtCore.QThread):
 
     def run_test_clear_log_130(self):
         self.set_test_name('Clear system log')
-        # ToDO: make Cancel function
         logs = self.controller.send_com_command('alarms numoflogs --json')
         logs = self.controller.str_to_dict(logs)
         num_logs = logs.get('NumOfLogs')[0].get('NUM')
@@ -452,7 +464,7 @@ class FufuiDOBR(QtCore.QThread):
             n = i%2
             while 1:
                 q = self.get_sn(i, n)
-                if q.get('is_err') is not None:
+                if q.get('is_err') is not None or q.get('None') is not None:
                     self.controller.log_signal.emit('Get band {} ASIS error. Retrying'.format(j))
                     time.sleep(1)
                     continue
@@ -502,7 +514,6 @@ class FufuiDOBR(QtCore.QThread):
     def get_ext_alarm(self):
         alarms = {}
         tmp = self.controller.send_com_command('get_ext_alarm.sh').split('\r\n')
-        # re.search('(?<=\s=\s)(\d)(?=\s)', tmp)
         for i in tmp:
             if re.search(r'(EXT_ALM)', i) is None or i == '':
                 continue
