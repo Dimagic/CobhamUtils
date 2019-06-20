@@ -382,10 +382,11 @@ class CobhamDB:
                     "(select *, idobr.sn " \
                     "from test_FufuiDOBR inner join idobr on idobr.asis = system_asis group by date_test) " \
                     "where system_asis like '%{}%' or sn like '%{}%' or type like '%{}%' " \
-                    "and date_test between '{}' and '{}'"\
+                    "and date_test between '{}' and '{}' order by date_test DESC"\
                 .format(filter_val, filter_val, filter_val, date_start, date_stop)
         else:
-            query = "select * from test_FufuiDOBR where date_test between '{}' and '{}' group by date_test".\
+            query = "select * from test_FufuiDOBR where date_test between '{}' and '{}' group by date_test " \
+                    "order by date_test DESC".\
                 format(date_start, date_stop)
         q = self.select_query(query)
         for i in q:
