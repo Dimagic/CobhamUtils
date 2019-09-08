@@ -10,6 +10,8 @@ from reportlab.platypus import (
     TableStyle)
 
 class Report:
+    bg_color = '#E2E2E2'
+
     def __init__(self, date, data, assembly, test_type):
         self.test_date = date
         self.data_report = data
@@ -44,22 +46,26 @@ class Report:
                 [self.assembly.get("rf_type_3"),
                  self.assembly.get("rf_asis_3"), self.assembly.get("rf_type_2"), self.assembly.get("rf_asis_2")]]
         t = Table(data, colWidths=100)
-        t.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        t.setStyle(TableStyle([('BACKGROUND', (0, 0), (0, -1), self.bg_color),
+                               ('BACKGROUND', (2, 0), (2, -1), self.bg_color),
+                               ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                                ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.black),
                                ('BOX', (0, 0), (-1, -1), 0.25, colors.black)
                                ]))
         return t
 
     def generate_data_table(self):
-        data = []
+        data = [["Section", "Description", "Status"]]
         for n, test in enumerate(self.data_report):
             data.append([n+1, test.get("meas"), test.get("result")])
 
-        t = Table(data, colWidths=[30,300,50])
+        t = Table(data, colWidths=[40,300,50])
         # ('ALIGN', (column, row), (column, row), XXX)
-        t.setStyle(TableStyle([('ALIGN', (0, 0), (0, -1), 'CENTER'),
-                               ('ALIGN', (1, 0), (1, -1), 'LEFT'),
-                               ('ALIGN', (2, 0), (2, -1), 'CENTER'),
+        t.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), self.bg_color),
+                               ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                               ('ALIGN', (0, 1), (0, -1), 'CENTER'),
+                               ('ALIGN', (1, 1), (1, -1), 'LEFT'),
+                               ('ALIGN', (2, 1), (2, -1), 'CENTER'),
                                ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.black),
                                ('BOX', (0, 0), (-1, -1), 0.25, colors.black)
                               ]))
