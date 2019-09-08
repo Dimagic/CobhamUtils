@@ -12,6 +12,7 @@ from utils.print_report import Report
 class WindowTestJournal(QDialog):
     def __init__(self, parent):
         super(WindowTestJournal, self).__init__(parent)
+
         self.db = CobhamDB()
         self.parent = parent
         self.assembly = {}
@@ -22,9 +23,9 @@ class WindowTestJournal(QDialog):
         self.w_journal.setWindowFlags(QtCore.Qt.WindowSystemMenuHint |
                                        QtCore.Qt.WindowMinMaxButtonsHint |
                                        QtCore.Qt.WindowCloseButtonHint)
+        self.w_journal.journal_tab.installEventFilter(self)
         self.w_journal.filter.textChanged.connect(self.filter)
         self.w_journal.print_btn.clicked.connect(self.print_report)
-
         self.header_journal = ["System type", "System ASIS", "System SN", "Test type", "Test date", "Result"]
         self.header_tests = ["Test name", "Result"]
         self.w_journal.journal_tab.cellDoubleClicked.connect(self.cellDoubleClick)
@@ -40,7 +41,7 @@ class WindowTestJournal(QDialog):
 
         self.fill_tab_header()
         self.fill_tab_row()
-        self.fill_temp_combo()
+        # self.fill_temp_combo()
 
         self.w_journal.exec_()
 
@@ -112,28 +113,35 @@ class WindowTestJournal(QDialog):
         total_system = {}
         pass_count = 0
         fail_count = 0
+        partial_count = 0
         total_tests = len(rows)
 
         for row in rows:
             total_system.update({row.get('asis'): None})
+
+            curr_sys = self.db.get_idobr_by_asis(row.get('asis'))
+            type_test = self.get_type_test(asis=curr_sys.get('asis'), date_test=row.get('date'))
+
             res = row.get('result')
-            if res == 'PASS':
+            if res == 'PASS' and 'partial' not in type_test.lower():
                 pass_count += 1
+            else:
+                partial_count += 1
             if res == 'FAIL':
                 fail_count += 1
 
-            curr_sys = self.db.get_idobr_by_asis(row.get('asis'))
-            if row.get('result') == 'PASS':
+            if row.get('result') == 'PASS' and 'partial' in type_test.lower():
+                result = QTableWidgetItem(QtGui.QIcon(self.parent.warningImg), "")
+            elif row.get('result') == 'PASS':
                 result = QTableWidgetItem(QtGui.QIcon(self.parent.passImg), "")
-            else:
+            if row.get('result') == 'FAIL':
                 result = QTableWidgetItem(QtGui.QIcon(self.parent.failImg), "")
             rowPosition = self.w_journal.journal_tab.rowCount()
             self.w_journal.journal_tab.insertRow(rowPosition)
             self.w_journal.journal_tab.setItem(rowPosition, 0, QTableWidgetItem(curr_sys.get('type')))
             self.w_journal.journal_tab.setItem(rowPosition, 1, QTableWidgetItem(curr_sys.get('asis')))
             self.w_journal.journal_tab.setItem(rowPosition, 2, QTableWidgetItem(curr_sys.get('sn')))
-            self.w_journal.journal_tab.setItem(rowPosition, 3, QTableWidgetItem(self.get_type_test(
-                asis=curr_sys.get('asis'), date_test=row.get('date'))))
+            self.w_journal.journal_tab.setItem(rowPosition, 3, QTableWidgetItem(type_test))
             self.w_journal.journal_tab.setItem(rowPosition, 4, QTableWidgetItem(row.get('date')))
             self.w_journal.journal_tab.setItem(rowPosition, 5, result)
             # self.w_journal.journal_tab.resizeRowsToContents()
@@ -143,6 +151,8 @@ class WindowTestJournal(QDialog):
         try:
             self.w_journal.pass_stat.setText("{}({}%)".format(str(pass_count),
                                                               str(round(pass_count * 100 / int(total_tests), 1))))
+            self.w_journal.partial_stat.setText("{}({}%)".format(str(partial_count),
+                                                              str(round(partial_count * 100 / int(total_tests), 1))))
             self.w_journal.fail_stat.setText("{}({}%)".format(str(fail_count),
                                                               str(round(fail_count * 100 / int(total_tests), 1))))
         except ZeroDivisionError:
@@ -221,6 +231,14 @@ class WindowTestJournal(QDialog):
     def filter(self):
         f_val = self.w_journal.filter.text().upper()
         self.fill_tab_row(f_val=f_val)
+
+    def eventFilter(self, source, event):
+        # ToDo: need fix
+        if event.type() == QtCore.QEvent.KeyPress:
+            row = self.w_journal.journal_tab.selectedIndexes()[0].row() - 1
+            if row >= 0:
+                self.cell_select(row, 1)
+        return False
 
 
 
