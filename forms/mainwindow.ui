@@ -638,6 +638,7 @@
     <property name="title">
      <string>Help</string>
     </property>
+    <addaction name="menu_test"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuHelp"/>
@@ -656,6 +657,11 @@
   <action name="menu_TestJournal">
    <property name="text">
     <string>Test journal</string>
+   </property>
+  </action>
+  <action name="menu_test">
+   <property name="text">
+    <string>test</string>
    </property>
   </action>
  </widget>

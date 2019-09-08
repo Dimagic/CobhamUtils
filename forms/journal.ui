@@ -84,7 +84,7 @@
    <item row="1" column="0" rowspan="6">
     <widget class="QTableWidget" name="journal_tab">
      <property name="editTriggers">
-      <set>QAbstractItemView::DoubleClicked</set>
+      <set>QAbstractItemView::AnyKeyPressed|QAbstractItemView::DoubleClicked</set>
      </property>
      <property name="tabKeyNavigation">
       <bool>true</bool>
@@ -122,8 +122,8 @@
        <widget class="QLabel" name="label">
         <property name="geometry">
          <rect>
-          <x>20</x>
-          <y>30</y>
+          <x>0</x>
+          <y>10</y>
           <width>71</width>
           <height>16</height>
          </rect>
@@ -144,7 +144,7 @@
        <widget class="QLabel" name="label_2">
         <property name="geometry">
          <rect>
-          <x>0</x>
+          <x>130</x>
           <y>10</y>
           <width>91</width>
           <height>16</height>
@@ -166,8 +166,8 @@
        <widget class="QLabel" name="label_3">
         <property name="geometry">
          <rect>
-          <x>20</x>
-          <y>50</y>
+          <x>0</x>
+          <y>70</y>
           <width>71</width>
           <height>16</height>
          </rect>
@@ -188,8 +188,8 @@
        <widget class="QLabel" name="label_4">
         <property name="geometry">
          <rect>
-          <x>20</x>
-          <y>70</y>
+          <x>0</x>
+          <y>30</y>
           <width>71</width>
           <height>16</height>
          </rect>
@@ -210,8 +210,8 @@
        <widget class="QLabel" name="total_test_stat">
         <property name="geometry">
          <rect>
-          <x>100</x>
-          <y>30</y>
+          <x>80</x>
+          <y>10</y>
           <width>81</width>
           <height>16</height>
          </rect>
@@ -229,7 +229,7 @@
        <widget class="QLabel" name="total_system_stat">
         <property name="geometry">
          <rect>
-          <x>100</x>
+          <x>230</x>
           <y>10</y>
           <width>47</width>
           <height>16</height>
@@ -242,8 +242,8 @@
        <widget class="QLabel" name="fail_stat">
         <property name="geometry">
          <rect>
-          <x>100</x>
-          <y>50</y>
+          <x>80</x>
+          <y>70</y>
           <width>91</width>
           <height>16</height>
          </rect>
@@ -255,14 +255,49 @@
        <widget class="QLabel" name="pass_stat">
         <property name="geometry">
          <rect>
-          <x>100</x>
-          <y>70</y>
+          <x>80</x>
+          <y>30</y>
           <width>91</width>
           <height>16</height>
          </rect>
         </property>
         <property name="text">
          <string>pass</string>
+        </property>
+       </widget>
+       <widget class="QLabel" name="label_7">
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>50</y>
+          <width>71</width>
+          <height>16</height>
+         </rect>
+        </property>
+        <property name="font">
+         <font>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="text">
+         <string>Partial:</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+       <widget class="QLabel" name="partial_stat">
+        <property name="geometry">
+         <rect>
+          <x>80</x>
+          <y>50</y>
+          <width>91</width>
+          <height>16</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>partial</string>
         </property>
        </widget>
       </widget>
