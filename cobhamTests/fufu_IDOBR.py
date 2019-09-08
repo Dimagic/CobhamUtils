@@ -34,6 +34,7 @@ class FufuiDOBR(QtCore.QThread):
 
     def stop_test(self):
         self._stopFlag = True
+        print('>>> ', self._stopFlag)
 
     def set_test_name(self, name):
         self.controller.send_test_name(name, 'Started')

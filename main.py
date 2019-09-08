@@ -13,6 +13,7 @@ from PyQt5.QtCore import QObject, QSize
 from PyQt5.QtGui import QMovie
 from PyQt5.QtWidgets import QMainWindow, QMessageBox, QInputDialog, QTableWidgetItem, QHeaderView, QAbstractItemView
 
+from cobhamGui.w_image import ImageMessage
 from cobhamGui.w_testJournal import WindowTestJournal
 from cobhamGui.w_testselect import WindowTestSelect
 from cobhamGui.w_calibration import WindowCalibration
@@ -28,7 +29,7 @@ from cobhamTests.fufu_MtdiDoha import FufuMtdi
 
 
 
-VERSION = '0.0.11'
+VERSION = '0.0.12'
 class EventListener(QtCore.QThread):
     timer_signal = QtCore.pyqtSignal(float)
     def __init__(self, parent):
@@ -97,6 +98,7 @@ class MainApp(QMainWindow, QObject):
 
         self.passImg = QtGui.QPixmap('Img/pass.png').scaled(30, 30)
         self.failImg = QtGui.QPixmap('Img/fail.png').scaled(30, 30)
+        self.warningImg = QtGui.QPixmap('Img/warning.png').scaled(30, 30)
         self.greenLedMovie = QMovie('Img/greenLed.gif')
         self.blueLedMovie = QMovie('Img/blueLed.gif')
         self.redLedMovie = QMovie('Img/redLed.gif')
@@ -107,6 +109,7 @@ class MainApp(QMainWindow, QObject):
         self.w_main.new_test_btn.clicked.connect(self.new_test)
         self.w_main.menu_Settings.triggered.connect(self.window_settings)
         self.w_main.menu_TestJournal.triggered.connect(self.window_test_journal)
+        self.w_main.menu_test.triggered.connect(self.send_img_msg)
         self.w_main.menu_Quit.triggered.connect(self.w_main.close)
         self.w_main.menu_Quit.setShortcut('Ctrl+Q')
 
@@ -221,10 +224,12 @@ class MainApp(QMainWindow, QObject):
         if self.w_main.start_test_btn.text() == 'START':
             self.run_controller(type_test=self.test_type)
         else:
-            if self.send_msg('i', 'CobhamUtils', 'stop', 2) == QMessageBox.Ok:
-                with futures.ThreadPoolExecutor(1) as executor:
-                    executor.submit(self.controller_thread.test)
+            if self.send_msg('i', 'CobhamUtils', 'Are you want stop test?', 2) == QMessageBox.Ok:
+                # with futures.ThreadPoolExecutor(1) as executor:
+                #     executor.submit(self.controller_thread.test)
+                self.controller_thread.curr_test = None
                 # self.controller_thread.curr_test.stop_test()
+
 
     def calibration(self):
         WindowCalibration(self)
@@ -332,68 +337,78 @@ class MainApp(QMainWindow, QObject):
         self.answer = msg.exec_()
         return self.answer
 
+    def send_img_msg(self, title, image_text, image):
+        # title = 'DL composite power test'
+        # image_text = 'Connect Generator to Base, Spectrum to Mobile using attenuators 30 dB'
+        # image = 'test.png'
+        self.answer = ImageMessage(self, title=title, text=image_text, image=image).get_answer()
+        print(self.answer)
+        return self.answer
+
+
     def new_test(self):
         # ToDo: temporary
-        while True:
-            val = self.input_msg('Scan system barcode:')
-            # val = 'DOBR0292/NUER'
-            if not val:
-                return
-            else:
-                tmp = val.split('/')
-                if len(tmp) != 2:
-                    self.send_msg('w', 'Warning', 'Entered incorrect number', 1)
-                    continue
-                self.system_type = tmp[0]
-                self.system_asis = tmp[1]
-                tests = self.cfg.cfg_read(file='./systems_config.ini', section='systems')
-                val = tests.get(self.system_type.upper())
+        val = self.input_msg('Scan system barcode:')
+        # val = 'DOBR0292/NUER'
+        if not val:
+            return
+        else:
+            tmp = val.split('/')
+            if len(tmp) != 2:
+                self.send_msg('w', 'Warning', 'Entered incorrect number', 1)
 
-                if val is not None:
-                    # ToDo: temporary
-                    sn = self.input_msg('Input system SN:')
-                    # sn = '112018000030'
-                    self.system_sn = sn
-                    if sn is None:
-                        return
-                    match = re.search('^(0[1-9])|(1[0-2])20((1[8-9])|(2[0-9]))[0-9]{6}$', sn)
-                    if not match:
-                        self.send_msg('i', 'CobhamUtils', 'Incorrect SN', 1)
-                        return False
-                    else:
-                        res = True
-                        idobr = self.db.get_idobr_by_asis(self.system_asis)
-                        if idobr and idobr.get('sn') not in match.group(0):
-                            res = False
-                            self.send_msg('i', 'CobhamUtils', 'Found iDOBR {}\nwith ASIS: {}\n'
-                                                                  'and another SN: {}'
-                                              .format(idobr.get('type'), idobr.get('asis'), idobr.get('sn')), 1)
-                        idobr = self.db.get_idobr_by_sn(sn)
-                        if idobr and idobr.get('asis') != self.system_asis:
-                            res = False
-                            self.send_msg('i', 'CobhamUtils', 'Found iDOBR {}\nwith SN: {}\n'
-                                                              'and another ASIS: {}'
-                                          .format(idobr.get('type'), idobr.get('sn'), idobr.get('asis')), 1)
-                        if not res:
-                            return res
+            self.system_type = tmp[0]
+            self.system_asis = tmp[1]
+            tests = self.cfg.cfg_read(file='./systems_config.ini', section='systems')
+            val = tests.get(self.system_type.upper())
 
-
-                    test_list = []
-                    for i in val.split(';'):
-                        test_list.append(i)
-                    self.test_type = WindowTestSelect(parent=self, tests=test_list).test_type
-                    if self.test_type == '':
-                        return
-                    if not self.check_calibration():
-                        self.w_main.start_test_btn.setEnabled(False)
-                else:
-                    self.send_msg('i', 'CobhamUtils', 'Tests for system {} is not available'.format(self.system_type), 1)
+            if val is not None:
+                # ToDo: temporary
+                sn = self.input_msg('Input system SN:')
+                # sn = '112018000030'
+                self.system_sn = sn
+                if sn is None:
                     return
+                match = re.search('^(0[1-9])|(1[0-2])20((1[8-9])|(2[0-9]))[0-9]{6}$', sn)
+                if not match:
+                    match = re.search('^[0-9]{8}$', sn)
+                if not match:
+                    self.send_msg('i', 'CobhamUtils', 'Incorrect SN', 1)
+                    return False
+                else:
+                    res = True
+                    idobr = self.db.get_idobr_by_asis(self.system_asis)
+                    if idobr and idobr.get('sn') not in match.group(0):
+                        res = False
+                        self.send_msg('i', 'CobhamUtils', 'Found iDOBR {}\nwith ASIS: {}\n'
+                                                              'and another SN: {}'
+                                          .format(idobr.get('type'), idobr.get('asis'), idobr.get('sn')), 1)
+                    idobr = self.db.get_idobr_by_sn(sn)
+                    if idobr and idobr.get('asis') != self.system_asis:
+                        res = False
+                        self.send_msg('i', 'CobhamUtils', 'Found iDOBR {}\nwith SN: {}\n'
+                                                          'and another ASIS: {}'
+                                      .format(idobr.get('type'), idobr.get('sn'), idobr.get('asis')), 1)
+                    if not res:
+                        return res
 
-                l = len(tmp[0])
-                self.w_main.art_lbl.setText(tmp[0][:l - 1])
-                self.w_main.rev_lbl.setText(tmp[0][l - 1:])
-                self.w_main.asis_lbl.setText(tmp[1])
+
+                test_list = []
+                for i in val.split(';'):
+                    test_list.append(i)
+                self.test_type = WindowTestSelect(parent=self, tests=test_list).test_type
+                if self.test_type == '':
+                    return
+                if not self.check_calibration():
+                    self.w_main.start_test_btn.setEnabled(False)
+            else:
+                self.send_msg('i', 'CobhamUtils', 'Tests for system {} is not available'.format(self.system_type), 1)
+                return
+
+            l = len(tmp[0])
+            self.w_main.art_lbl.setText(tmp[0][:l - 1])
+            self.w_main.rev_lbl.setText(tmp[0][l - 1:])
+            self.w_main.asis_lbl.setText(tmp[1])
 
         try:
             self.fill_test_tab()

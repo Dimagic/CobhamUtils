@@ -22,6 +22,7 @@ CALIBRATION = 'calibr'
 IDOBR_RF = 'idobr_rf'
 IDOBR = 'idobr'
 SDR = 'sdr'
+MTDI = 'mtdi'
 
 class CobhamDB:
     def __init__(self):
@@ -363,6 +364,7 @@ class CobhamDB:
 
     def save_test_result(self, res):
         status = 'PASS' if res.get('status') else 'FAIL'
+
         asis = self.get_idobr_by_asis(res.get('system_asis')).get('asis')
         if asis is not None:
             self.execute_query("INSERT INTO test_{} (system_asis, date_test, meas_name, meas_func, status) "

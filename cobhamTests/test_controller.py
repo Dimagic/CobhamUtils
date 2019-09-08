@@ -48,6 +48,7 @@ class TestController(QtCore.QThread):
     log_signal_arg = QtCore.pyqtSignal(str, int)
     timer_signal = QtCore.pyqtSignal(float)
     msg_signal = QtCore.pyqtSignal(str, str, str, int)
+    msg_img_signal = QtCore.pyqtSignal(str, str)
     input_signal = QtCore.pyqtSignal(str)
     set_label_signal = QtCore.pyqtSignal(str, str)
     check_com_signal = QtCore.pyqtSignal(bool)
@@ -71,8 +72,9 @@ class TestController(QtCore.QThread):
     def run(self):
         test_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         try:
-            if not Instruments(controller=self).check_instr():
-                return
+            # if not Instruments(controller=self).check_instr():
+            #     return
+
             if self.type_test == 'FufuiDOBR':
                 # if not self.curr_parent.check_calibration():
                 #     return
@@ -121,7 +123,58 @@ class TestController(QtCore.QThread):
                         self.test_result_signal.emit(x, result)
 
             if self.type_test == 'FufuMtdi':
+                if not self.system_login():
+                    self.send_msg('w', 'CobhamUtils', 'System login fail', 1)
+                    return
+                self.send_com_command('axsh SET NIC eth0 DYNAMIC')
+                self.get_ip()
                 self.curr_test = FufuMtdi(controller=self)
+                self.db.set_test_type(self.type_test)
+                count = self.curr_parent.w_main.tests_tab.rowCount()
+                tests_queue = self.curr_parent.tests_queue
+                for x in range(0, count):
+                    tmp = self.curr_parent.w_main.tests_tab.item(x, 1).text()
+                    for i in list(tests_queue.values()):
+                        if i[0] == tmp:
+                            test = i[1]
+                            break
+                    is_enable = self.curr_parent.w_main.tests_tab.item(x, 0).checkState()
+                    if is_enable == 2:
+                        curr_test = self.curr_parent.w_main.tests_tab.item(x, 1).text()
+                        while True:
+                            try:
+                                result = self.curr_test.start_current_test(test)
+                            except serial.serialutil.SerialException as e:
+                                q = self.send_msg('w', 'COM port error', str(e), 5)
+                                if q == QMessageBox.Retry:
+                                    continue
+                                # self.logger.info(str(e))
+                                return
+
+                            for_save = {'type_test': self.type_test,
+                                        'system_asis': self.curr_parent.w_main.asis_lbl.text(),
+                                        'system_type': self.curr_parent.system_type,
+                                        'date_test': test_date,
+                                        'meas_name': curr_test,
+                                        'meas_func': test,
+                                        'status': result}
+                            if not result or type(result) == Exception:
+                                q = self.send_msg('w', 'Error', 'Test {} fail'.format(test), 3)
+                                if q == QMessageBox.Ignore:
+                                    break
+                                if q == QMessageBox.Retry:
+                                    result = None
+                                    self.progress_bar_signal.emit(0, 0)
+                                    continue
+                                if q == QMessageBox.Cancel:
+                                    self.db.save_test_result(for_save)
+                                    self.test_result_signal.emit(x, result)
+                                    return
+                            else:
+                                break
+                        print(for_save)
+                        # self.db.save_FufuMtdi_result(for_save)
+                        self.test_result_signal.emit(x, result)
 
             if self.type_test == 'calibration':
                 self.curr_test = Calibration(controller=self)
@@ -131,10 +184,10 @@ class TestController(QtCore.QThread):
         #     self.send_msg('w', 'CobhamUtils', str(e), 1)
         #     return
 
-        except serial.serialutil.SerialException as e:
-            self.send_msg('c', 'Error', str(e), 1)
-            self.logger.info(str(e))
-            return
+        # except serial.serialutil.SerialException as e:
+        #     self.send_msg('w', 'COM port error', str(e), 1)
+        #     self.logger.info(str(e))
+        #     return
         except Exception as e:
             traceback_str = ''.join(traceback.format_tb(e.__traceback__))
             self.log_signal_arg.emit(traceback_str, -1)
@@ -203,7 +256,6 @@ class TestController(QtCore.QThread):
                 raise ValueError('Login fail. Fix the problem and try again.')
 
     def send_com_command(self, cmd):
-        cmd_tmp = cmd
         if cmd == self.settings.get('user_name') or \
                 cmd == self.settings.get('user_pass') or \
                     len(cmd) == 0:
@@ -246,7 +298,8 @@ class TestController(QtCore.QThread):
                     res = str(res).replace(cmd, '').replace('root@AxellShell[root]>', '')
                 return res
             except Exception as e:
-                q = self.send_msg('q', 'Cobham utils', str(e), 5)
+                # q = self.send_msg('q', 'Cobham utils', str(e), 5)
+                q = self.send_img_msg('Cobham utils', str(e))
                 if q == QMessageBox.Retry:
                     self.send_com_command(cmd)
                 if q == QMessageBox.Cancel:
@@ -304,11 +357,21 @@ class TestController(QtCore.QThread):
     def send_msg(self, icon, msgTitle, msgText, typeQestions):
         self.msg_signal.emit(icon, msgTitle, msgText, typeQestions)
         while self.curr_parent.answer is None:
+            time.sleep(.5)
+        else:
+            for_return = self.curr_parent.answer
+            self.curr_parent.answer = None
+            return for_return
+
+    def send_img_msg(self, msgText, msgImage):
+        self.msg_img_signal.emit(msgText, msgImage)
+        while self.curr_parent.answer is None:
             time.sleep(.05)
         else:
             for_return = self.curr_parent.answer
             self.curr_parent.answer = None
             return for_return
+
 
     @staticmethod
     def str_to_dict(val):
