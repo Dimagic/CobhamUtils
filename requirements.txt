@@ -4,7 +4,7 @@ kiwisolver==1.0.1
 matplotlib==3.0.3
 numpy==1.16.2
 Pillow==5.4.1
-psutil==5.6.1
+psutil==5.6.6
 pyparsing==2.3.1
 pypiwin32==223
 PyQt5==5.11.3
