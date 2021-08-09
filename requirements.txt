@@ -13,7 +13,7 @@ pyqtgraph==0.10.0
 pyserial==3.4
 python-dateutil==2.8.0
 PyVISA==1.9.1
-pywin32==224
+pywin32==301
 pywinauto==0.6.6
 reportlab==3.5.13
 six==1.12.0
